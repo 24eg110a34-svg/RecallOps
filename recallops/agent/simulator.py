@@ -85,8 +85,18 @@ class ActionExecution:
 class ScenarioSimulator:
     """World model for one scenario instance."""
 
-    def __init__(self, scenario: Scenario, *, stage_id: str | None = None, offset_s: float | None = None) -> None:
+    def __init__(
+        self,
+        scenario: Scenario,
+        *,
+        stage_id: str | None = None,
+        offset_s: float | None = None,
+        incident_id: str | None = None,
+    ) -> None:
         self.scenario = scenario
+        # Evidence ids must be scoped to the incident *instance*: the comparison
+        # runner and the demo script both re-open the same scenario under a new id.
+        self.incident_id = incident_id or scenario.id
         self.stage_id = stage_id or scenario.first_stage_id
         self.offset_s = float(offset_s if offset_s is not None else self._stage(self.stage_id).offset_s)
         self.metrics: dict[str, float] = {}
@@ -165,7 +175,7 @@ class ScenarioSimulator:
         return self.snapshot(), [], []
 
     def reveal_stage(self, stage: StageSpec) -> list[EvidenceRef]:
-        incident_id = self.scenario.id
+        incident_id = self.incident_id
         ts = self.scenario.timestamp(stage.offset_s)
         return [
             normalize_stage_evidence(item, incident_id, stage.id, ts)

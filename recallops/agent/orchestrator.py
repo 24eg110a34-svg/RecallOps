@@ -1505,6 +1505,7 @@ class IncidentOrchestrator:
             scenario,
             stage_id=str(meta.get("stage_id") or scenario.first_stage_id),
             offset_s=float(meta.get("offset_s", 0) or 0),
+            incident_id=incident.id,
         )
         for name, value in (meta.get("sim_metrics") or {}).items():
             sim.metrics[name] = float(value)

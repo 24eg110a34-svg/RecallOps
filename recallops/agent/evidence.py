@@ -257,8 +257,13 @@ def normalize_stage_evidence(item: Any, incident_id: str, stage: str, ts: dateti
     raw.setdefault("stage", stage)
     if raw.get("diagnostic"):
         raw["diagnostic"] = True
+    # Scenario evidence ids are scenario-scoped ("A2-POOL"), so they must be
+    # namespaced per incident: two incidents of the same scenario must not collide
+    # on the primary key, and neither may silently skip the other's evidence.
+    base_id = str(item.id or evidence_id(kind.value.upper()[:4], incident_id, stage, title[:24]))
+    namespaced = base_id if base_id.startswith(incident_id) else f"{incident_id}:{base_id}"
     return EvidenceRef(
-        id=item.id or evidence_id(kind.value.upper()[:4], incident_id, stage, title[:24]),
+        id=namespaced,
         kind=kind,
         source=item.source,
         title=title,

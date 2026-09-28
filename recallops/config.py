@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     app_version: str = "1.0.0"
     environment: str = "local"
     demo_mode: bool = True
+    demo_seed_on_start: bool = True
     database_url: str = "sqlite:///./recallops.db"
     scenarios_dir: str = "./scenarios"
     cors_origins: str = "http://localhost:4321,http://127.0.0.1:4321"

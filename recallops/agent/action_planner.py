@@ -127,7 +127,11 @@ class ActionPlanner:
             if definition.id in already:
                 continue
             spec = action_spec(definition, incident_id=incident_id, step_index=next_index, hypothesis=top)
-            match = max((action_matches_memory(definition, m) for m in failed_memories), default=0.0)
+            # Only state-changing actions can be blocked by a remembered failure.
+            # A read-only diagnostic is cheap and safe, so memory may only add a note.
+            match = 0.0
+            if not definition.read_only:
+                match = max((action_matches_memory(definition, m) for m in failed_memories), default=0.0)
             if match >= 0.5:
                 matching = next(m for m in failed_memories if action_matches_memory(definition, m) >= 0.5)
                 warning = (
@@ -144,6 +148,12 @@ class ActionPlanner:
                 blocked.append(spec)
                 outcome.memory_warnings.append(warning)
                 continue
+            if definition.read_only and failed_memories:
+                # Read-only checks stay available; the learned lesson is attached as context.
+                spec.memory_warnings = [
+                    f"Previous similar incident attempted a similar check: {warning}"
+                    for warning in outcome.memory_warnings[:1]
+                ]
             specs.append(spec)
             next_index += 1
 

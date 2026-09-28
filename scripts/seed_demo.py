@@ -21,7 +21,9 @@ from recallops.persistence.db import init_db  # noqa: E402
 def main() -> int:
     parser = argparse.ArgumentParser(description="Seed RecallOps demo data")
     parser.add_argument("--all", action="store_true", help="also run the full scripted demo (A1 -> A2 -> comparison)")
+    parser.add_argument("--story", action="store_true", help="play the full incident story (default when the database is empty)")
     parser.add_argument("--reset", action="store_true", help="reset the database first")
+    parser.add_argument("--reset-only", action="store_true", help="do not play the story, just create NEW incidents")
     args = parser.parse_args()
 
     init_db()
@@ -37,6 +39,13 @@ def main() -> int:
         set_container(build_container())
         container = get_container()
         orchestrator = container.orchestrator
+
+    from recallops.services.seed_story import is_empty, seed_story
+
+    if args.story or (is_empty(orchestrator) and not args.reset_only):
+        story = seed_story(orchestrator=orchestrator, memory=container.memory)
+        print(json.dumps(story, indent=2, default=str))
+        return 0
 
     created = []
     for scenario in orchestrator.scenarios:

@@ -11,6 +11,7 @@ from typing import Any
 
 from recallops.agent.orchestrator import IncidentOrchestrator
 from recallops.memory.factory import set_memory_adapter
+from recallops.domain.enums import MemoryMode
 from recallops.memory.port import MemoryDisabledAdapter, MemoryPort
 from recallops.persistence import models as orm
 
@@ -124,6 +125,9 @@ class ComparisonService:
         try:
             row = self.orchestrator.get_incident(session, incident_id)
             row.meta = {**(row.meta or {}), "comparison": True, "comparison_mode": "on" if memory_enabled else "off"}
+            # Recorded on the row so the read-back endpoint can tell the two runs apart.
+            row.memory_enabled = memory_enabled
+            row.memory_mode = MemoryMode.HINDSIGHT.value if memory_enabled else MemoryMode.DISABLED.value
             session.commit()
         finally:
             session.close()
@@ -159,7 +163,13 @@ class ComparisonService:
                 if not progressed:
                     break
                 continue
-            action = next((a for a in pending if not a.blocked_reason), None)
+            # Responder policy: once diagnostics are done, act on the leading
+            # remediation. A blocked action is never taken; memory ON simply
+            # removes the useless one from the list, which is the point of the run.
+            action = next(
+                (a for a in pending if not a.blocked_reason and a.risk.value != "READ_ONLY"),
+                None,
+            ) or next((a for a in pending if not a.blocked_reason), None)
             if action is None:
                 # everything recommended is blocked by memory: force a fresh analysis
                 if not self._advance(incident_id):

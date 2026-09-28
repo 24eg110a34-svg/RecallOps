@@ -12,14 +12,23 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+# Set before any recallops import: ``get_settings`` is cached at import time, so a
+# session fixture would be too late and the app would auto-seed the demo story.
+os.environ.setdefault("DATABASE_URL", "sqlite:///./test_recallops.db")
+os.environ.setdefault("LLM_PROVIDER", "local_heuristic")
+os.environ.setdefault("HINDSIGHT_ENABLED", "0")
+os.environ.setdefault("DEMO_MODE", "true")
+os.environ.setdefault("DEMO_SEED_ON_START", "false")
+os.environ.setdefault("CORS_ORIGINS", "http://localhost:4321")
+
 
 @pytest.fixture(scope="session", autouse=True)
 def _env() -> None:
-    os.environ.setdefault("DATABASE_URL", "sqlite:///./test_recallops.db")
-    os.environ.setdefault("LLM_PROVIDER", "local_heuristic")
-    os.environ.setdefault("HINDSIGHT_ENABLED", "0")
-    os.environ.setdefault("DEMO_MODE", "true")
-    os.environ.setdefault("CORS_ORIGINS", "http://localhost:4321")
+    """Re-assert the test environment (in case something mutated it)."""
+    os.environ["DATABASE_URL"] = os.environ.get("DATABASE_URL", "sqlite:///./test_recallops.db")
+    os.environ["LLM_PROVIDER"] = "local_heuristic"
+    os.environ["HINDSIGHT_ENABLED"] = "0"
+    os.environ["DEMO_SEED_ON_START"] = "false"
 
 
 @pytest.fixture()

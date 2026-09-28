@@ -50,6 +50,27 @@ async def lifespan(app: FastAPI):  # noqa: ANN201
     logger.info("Memory layer: %s (%s) - %s", memory_health.state, memory_health.mode.value, memory_health.detail)
     logger.info("LLM provider: %s", container.llm.describe())
     logger.info("Scenarios: %s", ", ".join(container.orchestrator.scenarios.ids()))
+
+    if settings.demo_mode and settings.demo_seed_on_start:
+        from recallops.services.seed_story import is_empty, seed_story
+
+        if is_empty(container.orchestrator):
+            logger.info("Empty database detected - playing the demo story once so the console opens on a real investigation...")
+            try:
+                # Seeding is synchronous I/O; keep it off the event loop.
+                import anyio
+
+                summary = await anyio.to_thread.run_sync(
+                    lambda: seed_story(orchestrator=container.orchestrator, memory=container.memory)
+                )
+                logger.info(
+                    "Demo story ready: %s incident(s), %s memories, comparison off/on = %s",
+                    len(summary.get("incidents", [])),
+                    summary.get("memories_total"),
+                    summary.get("comparison"),
+                )
+            except Exception as exc:  # noqa: BLE001 - never block startup on seeding
+                logger.warning("Demo seeding skipped: %s", exc)
     yield
     logger.info("RecallOps shutting down")
 
