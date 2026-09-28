@@ -1,0 +1,74 @@
+{
+  "restart_api_pool": {
+    "outcome": "temporary_improvement",
+    "helped": null,
+    "resolves": false,
+    "next_stage": "restart_result",
+    "detail": "Rolling restart of the payment-api workers dropped 5xx from 31% to ~12% and freed the pool, but the same v2.17.4 build is still running, so connections leak again.",
+    "projection": [
+      {"t": "0s", "http_5xx_pct": 31.0, "redis_connections_active": 100, "redis_pool_wait_ms": 742},
+      {"t": "20s", "http_5xx_pct": 12.0, "redis_connections_active": 58, "redis_pool_wait_ms": 40},
+      {"t": "48s", "http_5xx_pct": 24.0, "redis_connections_active": 92, "redis_pool_wait_ms": 410},
+      {"t": "96s", "http_5xx_pct": 31.0, "redis_connections_active": 100, "redis_pool_wait_ms": 760}
+    ],
+    "regression_after_s": 48,
+    "lesson": "Restarting payment-api pods produced only temporary improvement and then regression.",
+    "reusable_lesson": "Restarting payment-api pods did not resolve Redis connection-pool exhaustion under this condition: the 5xx rate fell from 31% to about 12% for roughly 45 seconds and then returned to 31% because the leaking build was still deployed. Do not treat a pod restart as remediation for pool exhaustion; inspect the per-worker connection count and the deploy diff instead.",
+    "warning": "Previous similar incident: restarting API pods produced only temporary improvement and regression."
+  },
+  "rollback_recent_deploy": {
+    "outcome": "helped",
+    "helped": true,
+    "resolves": true,
+    "next_stage": "resolved",
+    "detail": "Rolled payment-api back to v2.17.3. The leaking checkout path is gone, the per-worker pool drains back to ~63/100, and 5xx returns to the 0.4% baseline.",
+    "projection": [
+      {"t": "0s", "http_5xx_pct": 31.0, "redis_connections_active": 100, "redis_pool_wait_ms": 760},
+      {"t": "60s", "http_5xx_pct": 9.0, "redis_connections_active": 78, "redis_pool_wait_ms": 120},
+      {"t": "180s", "http_5xx_pct": 0.6, "redis_connections_active": 64, "redis_pool_wait_ms": 4},
+      {"t": "300s", "http_5xx_pct": 0.4, "redis_connections_active": 63, "redis_pool_wait_ms": 3}
+    ],
+    "lesson": "Rolling back the leaking release fixed the incident; the leak was in the deployed version, not in the runtime.",
+    "reusable_lesson": "For payment-api Redis connection-pool exhaustion, rolling back the release that introduced the connection leak restores service (connections 100/100 -> ~63/100, 5xx 31% -> 0.4%)."
+  },
+  "increase_redis_pool_size": {
+    "outcome": "helped",
+    "helped": true,
+    "resolves": true,
+    "next_stage": "resolved",
+    "detail": "Raised the per-worker Redis pool from 100 to 150 and lowered the acquisition timeout to 250ms. Buys headroom but the leak is still present, so saturation returns later; effective now, not durable.",
+    "projection": [
+      {"t": "0s", "http_5xx_pct": 31.0, "redis_connections_active": 100, "redis_pool_wait_ms": 760},
+      {"t": "90s", "http_5xx_pct": 3.0, "redis_connections_active": 118, "redis_pool_wait_ms": 30},
+      {"t": "240s", "http_5xx_pct": 1.2, "redis_connections_active": 141, "redis_pool_wait_ms": 22}
+    ],
+    "lesson": "Increasing the pool size masked the exhaustion temporarily; capacity is finite and the leak remains, so this is a mitigation, not a fix.",
+    "reusable_lesson": "Increasing the payment-api Redis pool from 100 to 150 connections reduced 5xx to about 1-3% but the leak in v2.17.4 was still present; treat pool growth as a time-boxed mitigation, not a resolution."
+  },
+  "scale_out_workers": {
+    "outcome": "hurt",
+    "helped": false,
+    "resolves": false,
+    "next_stage": "regression",
+    "detail": "Adding 12 more workers made it worse: each new worker opened its own 100-connection pool, so Redis hit its client limit (10k) and 5xx climbed to 38%.",
+    "projection": [
+      {"t": "0s", "http_5xx_pct": 31.0, "redis_connections_active": 100, "redis_pool_wait_ms": 760},
+      {"t": "120s", "http_5xx_pct": 38.0, "redis_connections_active": 100, "redis_pool_wait_ms": 980}
+    ],
+    "lesson": "Scaling out amplified the pool problem because pool size is per worker.",
+    "reusable_lesson": "Scaling payment-api out during a Redis pool exhaustion incident makes it worse: the connection budget is per worker, so extra workers consume more Redis connections."
+  },
+  "flush_cache": {
+    "outcome": "hurt",
+    "helped": false,
+    "resolves": false,
+    "next_stage": "regression",
+    "detail": "High-risk action: flushing the cart session cache would drop live carts. Blocked by the safety gate; if forced it would destroy in-flight checkout state.",
+    "projection": [
+      {"t": "0s", "http_5xx_pct": 31.0, "redis_connections_active": 100, "redis_pool_wait_ms": 760},
+      {"t": "10s", "http_5xx_pct": 44.0, "redis_connections_active": 100, "redis_pool_wait_ms": 900}
+    ],
+    "lesson": "Cache flush is destructive for cart sessions and was blocked; it does not fix a client-side pool leak.",
+    "reusable_lesson": "Flushing the payment-api cart cache during an incident destroys in-flight checkout state and does not resolve a client-side connection leak."
+  }
+}

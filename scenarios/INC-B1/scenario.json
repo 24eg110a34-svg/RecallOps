@@ -1,0 +1,16 @@
+{
+  "id": "INC-B1",
+  "title": "orders-api: order creation stalls, Postgres pool exhausted",
+  "service": "orders-api",
+  "role": "distractor",
+  "summary": "Looks like the payment-api Redis incident (timeouts, 503s, saturated pool) but is a database problem: a slow query regression holds the Postgres pool. Recalled Redis memories from INC-A1/INC-A2 must be shown as CONTRADICTED by current evidence, not copied.",
+  "severity_hint": "SEV-2",
+  "service_criticality": "critical",
+  "customer_impact": "moderate",
+  "symptom": "Order creation latency p95 rose from 180ms to 6.4s and 503s on POST /v2/orders with 'too many clients already' from Postgres.",
+  "base_time": "2026-03-03T21:40:00Z",
+  "baseline_error_rate_pct": 0.3,
+  "tags": ["postgres", "slow-query", "distractor", "contradiction"],
+  "memory_expected": true,
+  "demo_notes": "This is the scenario that proves the agent does not blindly copy historical memory. If the runbook says 'restart the pods' and memory says 'Redis', both are wrong here."
+}

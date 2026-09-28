@@ -1,0 +1,15 @@
+# RecallOps backend dependencies (pinned to what was verified on Python 3.14)
+fastapi>=0.115
+uvicorn[standard]>=0.30
+pydantic>=2.7
+pydantic-settings>=2.3
+sqlalchemy>=2.0
+httpx>=0.27
+python-dotenv>=1.0
+
+# Optional: the real Hindsight memory client. The app degrades to the local
+# Hindsight mirror when it is absent or the server is unreachable.
+hindsight-client>=0.10
+
+# Tests
+pytest>=8.0

@@ -1,0 +1,12 @@
+[
+  {"name": "http_5xx_pct", "label": "HTTP 5xx rate", "value": 6.1, "unit": "percent", "baseline": 0.4, "limit": 5.0, "stage": "alert"},
+  {"name": "http_504_pct", "label": "HTTP 504 rate", "value": 5.4, "unit": "percent", "baseline": 0.1, "limit": 2.0, "stage": "alert"},
+  {"name": "latency_p95_ms", "label": "Checkout confirm p95", "value": 8100, "unit": "ms", "baseline": 590, "limit": 2000, "stage": "alert"},
+  {"name": "fraud_provider_timeout_pct", "label": "fraud-scoring-eu timeout rate", "value": 38.0, "unit": "percent", "baseline": 0.2, "limit": 5.0, "stage": "alert"},
+  {"name": "fraud_provider_latency_p95_ms", "label": "fraud-scoring-eu p95", "value": 8020, "unit": "ms", "baseline": 180, "limit": 1200, "stage": "alert"},
+  {"name": "redis_connections_active", "label": "Redis client connections", "value": 52, "unit": "count", "baseline": 50, "limit": 100, "stage": "alert", "note": "healthy - contradicts the recalled pool precedent"},
+  {"name": "postgres_connections_active", "label": "Postgres connections", "value": 61, "unit": "count", "baseline": 58, "limit": 200, "stage": "alert"},
+  {"name": "cpu_utilization_pct", "label": "Service CPU", "value": 41, "unit": "percent", "baseline": 39, "limit": 85, "stage": "alert"},
+  {"name": "memory_utilization_pct", "label": "Service memory", "value": 58, "unit": "percent", "baseline": 57, "limit": 90, "stage": "alert"},
+  {"name": "rps", "label": "Request rate", "value": 1120, "unit": "req/s", "baseline": 1140, "limit": 4000, "stage": "alert"}
+]

@@ -1,0 +1,16 @@
+{
+  "id": "INC-D1",
+  "title": "catalog-api: CPU spike and query explosion after v5.2.0",
+  "service": "catalog-api",
+  "role": "regression",
+  "summary": "A release removed the ORM prefetch and turned one query per item into one query per request. CPU pins at 97%, queries-per-request jumps from 9 to 1180, and the database burns CPU as a side effect. Restarting does not help; scaling out makes it worse.",
+  "severity_hint": "SEV-2",
+  "service_criticality": "important",
+  "customer_impact": "moderate",
+  "symptom": "Category pages take 4-9s, CPU is at 97%, and queries-per-request is 1180 (baseline 9) eleven minutes after v5.2.0 shipped.",
+  "base_time": "2026-04-08T16:22:00Z",
+  "baseline_error_rate_pct": 0.2,
+  "tags": ["cpu", "n-plus-one", "bad-deploy", "database"],
+  "memory_expected": true,
+  "demo_notes": "Shows a third shape of incident: no timeouts, no pool saturation, just CPU and query volume. Restart is a red herring; rollback is the fix."
+}

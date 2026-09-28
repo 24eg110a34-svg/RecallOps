@@ -1,0 +1,11 @@
+{
+  "alert_id": "ALR-6620",
+  "monitor": "catalog_api.cpu_saturation{service=catalog-api}",
+  "title": "catalog-api: CPU saturation 97%, category pages degraded",
+  "symptom": "Category and product pages take 4-9s. CPU 97% (baseline 34%), queries-per-request 1180 (baseline 9), error rate 4.1%.",
+  "fired_at_offset_s": 0,
+  "threshold": "cpu > 90% for 5m",
+  "runbook": "https://runbooks.internal/catalog/catalog-api-latency",
+  "labels": {"env": "prod", "region": "us-east-1", "team": "catalog", "service": "catalog-api", "severity_hint": "SEV-2", "dashboard": "https://grafana.internal/d/catalog-api"},
+  "notes": "Paged on CPU. No error-rate alert fired because the service degrades rather than fails."
+}

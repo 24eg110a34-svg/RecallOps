@@ -1,0 +1,9 @@
+[
+  {"name": "web-frontend", "kind": "internal", "direction": "upstream", "status": "healthy", "criticality": "important", "latency_p95_ms": 70, "error_rate_pct": 0.1, "note": "checkout UI"},
+  {"name": "api-gateway", "kind": "internal", "direction": "upstream", "status": "healthy", "criticality": "critical", "latency_p95_ms": 44, "error_rate_pct": 0.2, "note": "routing"},
+  {"name": "checkout-web", "kind": "internal", "direction": "self", "status": "degraded", "criticality": "critical", "latency_p95_ms": 8100, "error_rate_pct": 6.1, "note": "blocked on the external call"},
+  {"name": "redis-cache", "kind": "datastore", "direction": "downstream", "status": "healthy", "criticality": "important", "latency_p95_ms": 1.0, "error_rate_pct": 0.0, "note": "healthy"},
+  {"name": "postgres-orders", "kind": "datastore", "direction": "downstream", "status": "healthy", "criticality": "critical", "latency_p95_ms": 8.0, "error_rate_pct": 0.0, "note": "healthy"},
+  {"name": "fraud-scoring-eu", "kind": "external", "direction": "downstream", "status": "unhealthy", "criticality": "critical", "latency_p95_ms": 8020, "error_rate_pct": 38.0, "note": "third-party provider partial outage (confirmed on their status page)"},
+  {"name": "psp-acquirer-eu", "kind": "external", "direction": "downstream", "status": "healthy", "criticality": "critical", "latency_p95_ms": 220, "error_rate_pct": 0.1, "note": "healthy"}
+]

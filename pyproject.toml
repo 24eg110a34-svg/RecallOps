@@ -1,0 +1,42 @@
+[project]
+name = "recallops"
+version = "0.1.0"
+description = "RecallOps - AI Incident Response Agent with Hindsight persistent memory"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.3",
+    "sqlalchemy>=2.0",
+    "httpx>=0.27",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+hindsight = ["hindsight-client>=0.1"]
+dev = ["pytest>=8.0"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = [
+    "recallops",
+    "recallops.domain",
+    "recallops.agent",
+    "recallops.memory",
+    "recallops.tools",
+    "recallops.services",
+    "recallops.services.llm",
+    "recallops.persistence",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+filterwarnings = ["ignore::DeprecationWarning"]
+markers = [
+    "e2e: end to end smoke tests against a live app instance",
+]

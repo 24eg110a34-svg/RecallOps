@@ -1,0 +1,4 @@
+[
+  {"version": "v3.4.1", "deployed_at_offset_s": -259200, "author": "@a.berg", "change_summary": "Fraud scoring v2 client, retry budget 2", "status": "healthy", "risk": "low", "files_changed": 5, "tags": ["fraud"], "note": "3 days before the incident - outside the correlation window"},
+  {"version": "v3.4.0", "deployed_at_offset_s": -604800, "author": "@a.berg", "change_summary": "Checkout session copy change", "status": "healthy", "risk": "low", "files_changed": 3, "tags": ["checkout"]}
+]

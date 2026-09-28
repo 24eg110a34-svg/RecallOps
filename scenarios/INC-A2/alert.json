@@ -1,0 +1,18 @@
+{
+  "alert_id": "ALR-9104",
+  "monitor": "checkout.latency_budget_breach{service=payment-api}",
+  "title": "payment-api: checkout timeout budget breached, mixed 502/503",
+  "symptom": "Checkout p95 rose from 210ms to 3.9s. Responses are a mix of 502 and 503; 'cache acquisition timed out' dominates the log stream.",
+  "fired_at_offset_s": 0,
+  "threshold": "checkout p95 > 2s for 2m",
+  "runbook": "https://runbooks.internal/payments/payment-api-5xx",
+  "labels": {
+    "env": "prod",
+    "region": "eu-west-1",
+    "team": "payments",
+    "service": "payment-api",
+    "severity_hint": "SEV-2",
+    "dashboard": "https://grafana.internal/d/payment-api-checkout"
+  },
+  "notes": "Paged as SEV-2 because the 5xx ratio has not breached 5% yet. Same runbook as the March 5xx storm, which is why responders instinctively start with a restart."
+}

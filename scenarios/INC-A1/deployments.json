@@ -1,0 +1,42 @@
+[
+  {
+    "version": "v2.17.4",
+    "deployed_at_offset_s": -840,
+    "author": "@m.okonkwo",
+    "change_summary": "Cart session cache: switch to per-worker connection pool, add billing-meta read to checkout path",
+    "status": "current",
+    "risk": "high",
+    "files_changed": 23,
+    "tags": ["cache", "checkout", "pool-config"]
+  },
+  {
+    "version": "v2.17.3",
+    "deployed_at_offset_s": -43200,
+    "author": "@m.okonkwo",
+    "change_summary": "Retry budget for PSP calls, metric labels",
+    "status": "healthy",
+    "risk": "low",
+    "files_changed": 6,
+    "tags": ["psp", "metrics"]
+  },
+  {
+    "version": "v2.17.2",
+    "deployed_at_offset_s": -302400,
+    "author": "@r.dubois",
+    "change_summary": "Dependency bump: redis-py 5.0.1 -> 5.0.2",
+    "status": "healthy",
+    "risk": "low",
+    "files_changed": 2,
+    "tags": ["deps"]
+  },
+  {
+    "version": "v2.17.1",
+    "deployed_at_offset_s": -604800,
+    "author": "@r.dubois",
+    "change_summary": "Checkout idempotency keys",
+    "status": "healthy",
+    "risk": "medium",
+    "files_changed": 11,
+    "tags": ["checkout"]
+  }
+]

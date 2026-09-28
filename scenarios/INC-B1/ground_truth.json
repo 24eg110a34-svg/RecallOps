@@ -1,0 +1,47 @@
+{
+  "root_cause_id": "db_connection_saturation",
+  "root_cause": "Slow query regression on order_items exhausted the Postgres connection pool",
+  "root_cause_detail": "orders-api v4.9.2 enabled analytics joins by default on the order search path. order_items has not been analyzed in 9 days, so the planner chose a seq scan; orders_search_by_customer now averages 4.2s. Each request holds a connection for 4.2s, so 200 connections are consumed in ~90 seconds and everything else queues for 4-5s. The Redis pool is at 41/100 with no RedisTimeout errors - the recalled payment-api precedent does not apply.",
+  "confirmed_root_cause": "db_connection_saturation",
+  "secondary_cause_id": "slow_query_regression",
+  "resolution": "Added a concurrent index on order_items(customer_id) and disabled the analytics join by default, then ANALYZE order_items. Query p95 back to 190ms, pool at 61/200.",
+  "resolution_summary": "Index + disable analytics join + ANALYZE",
+  "verification": "db_query_p95 4210ms -> 190ms, postgres_connections 200/200 -> 61/200, 5xx 18.4% -> 0.3%",
+  "contributing_factors": [
+    "order_items was not ANALYZEd after the last bulk load, so the planner used a seq scan",
+    "A feature flag defaulted analytics joins on, so the risky query entered the default path",
+    "Connection pool size (200) was equal to Postgres max_connections, leaving no headroom for admin/migration traffic",
+    "Responding to the same alert text as the payment-api incidents encouraged a Redis-shaped response"
+  ],
+  "prevention": [
+    "Set application pool max well below max_connections (60% rule) and alert on saturation",
+    "Add a query budget check in CI that fails when p95 query time regresses more than 3x",
+    "Auto-analyze large tables after bulk loads",
+    "Run ANALYZE on schedule for order_items"
+  ],
+  "runbook_changes": [
+    "Add 'is it the database or the cache?' as an explicit first branch in the orders-api latency runbook",
+    "Add the pg_stat_statements top-total_time query as step 2",
+    "Link the Redis pool incident runbook with an explicit 'not applicable when the cache pool is below 50%' note"
+  ],
+  "lessons": [
+    "Historical memory is precedent, not proof: the Redis pool exhaustion memory from INC-A1/INC-A2 was recalled and explicitly rejected because redis_connections_active was 41/100 with no RedisTimeout errors.",
+    "Restarting pods cannot fix a slow query - it re-establishes 200 connections onto the same query, and pg hit max_connections again in 25 seconds.",
+    "A connection pool sized equal to the database's max_connections guarantees that one slow query becomes a total outage.",
+    "The highest-information check here was one query: total_time from pg_stat_statements."
+  ],
+  "first_checks": [
+    "which dependency is saturated: cache pool or database pool",
+    "pg_stat_statements top total_time",
+    "connection states in pg_stat_activity",
+    "when was the last ANALYZE on the tables in the failing query"
+  ],
+  "successful_action_ids": ["add_index", "kill_long_running_queries", "inspect_query_stats", "inspect_db_connections"],
+  "failed_action_ids": ["restart_api_pool", "increase_redis_pool_size"],
+  "avoid_action_ids": ["restart_api_pool", "increase_redis_pool_size", "scale_out_workers", "failover_database", "flush_cache"],
+  "confirmed_by": "db_query_p95 below 500ms and pool below 50% of max for 5 minutes",
+  "resolvable_by": ["add_index", "kill_long_running_queries", "rollback_recent_deploy"],
+  "doomed_actions": ["restart_api_pool", "increase_redis_pool_size"],
+  "memory_episode": "INC-B1 (orders-api, SEV-2): order creation p95 rose to 6.4s with 503s and 'too many clients already' from Postgres. Cause: the v4.9.2 analytics join on the order search path ran a 4.2s seq scan over order_items and consumed all 200 pool connections. Redis was healthy at 41/100, so the earlier Redis pool memories did not apply. Resolved by indexing order_items(customer_id), disabling the analytics join and ANALYZEd the table. Check first next time: which pool is saturated (cache or database) and the pg_stat_statements top total_time query.",
+  "memory_service_pattern": "orders-api depends on postgres-orders with a 200-connection pool equal to max_connections. Its characteristic failure is a slow-query regression on order_items / order search that saturates the pool. Do not reach for the Redis playbook here: check the database pool first. Restarting pods makes it worse (max_connections in 25s)."
+}

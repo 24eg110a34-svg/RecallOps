@@ -1,0 +1,11 @@
+{
+  "alert_id": "ALR-3312",
+  "monitor": "checkout_web.dependency_timeout{provider=fraud-scoring-eu}",
+  "title": "checkout-web: fraud-scoring-eu upstream timeout",
+  "symptom": "POST /v2/checkout/confirm blocks on the external fraud-scoring call (upstream timeout after 8000ms). Internal latency excluding the provider is unchanged.",
+  "fired_at_offset_s": 0,
+  "threshold": "external dependency timeout rate > 20% for 2m",
+  "runbook": "https://runbooks.internal/checkout/third-party-degradation",
+  "labels": {"env": "prod", "region": "eu-west-1", "team": "checkout", "service": "checkout-web", "severity_hint": "SEV-2", "provider": "fraud-scoring-eu"},
+  "notes": "Provider status page shows a partial outage in eu-west. No deploy in the last 72 hours."
+}

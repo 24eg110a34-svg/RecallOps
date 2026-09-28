@@ -1,0 +1,81 @@
+{
+  "restart_api_pool": {
+    "outcome": "no_effect",
+    "helped": null,
+    "resolves": false,
+    "next_stage": "restart_result",
+    "detail": "Rolling restart of orders-api workers changed nothing: within 25 seconds the pods re-established 200 connections onto the same 4.2s query and Postgres refused the rest.",
+    "projection": [
+      {"t": "0s", "http_5xx_pct": 18.4, "postgres_connections_active": 200, "db_query_p95_ms": 4210},
+      {"t": "25s", "http_5xx_pct": 18.4, "postgres_connections_active": 200, "db_query_p95_ms": 4210}
+    ],
+    "lesson": "Restarting orders-api pods had no effect on a database-side slow query.",
+    "reusable_lesson": "Restarting orders-api pods does not help when Postgres connections are exhausted by a slow query: the new workers immediately re-open 200 connections and hit max_connections again within 25 seconds. Diagnose the query instead."
+  },
+  "increase_redis_pool_size": {
+    "outcome": "no_effect",
+    "helped": null,
+    "resolves": false,
+    "next_stage": "saturation",
+    "detail": "Raising the Redis client pool from 100 to 200 changed nothing measurable: the cache was never the constraint (41/100 acquired). Kept as evidence that the recalled Redis playbook does not apply to orders-api.",
+    "projection": [
+      {"t": "0s", "http_5xx_pct": 18.4, "postgres_connections_active": 200, "db_query_p95_ms": 4210},
+      {"t": "120s", "http_5xx_pct": 18.4, "postgres_connections_active": 200, "db_query_p95_ms": 4210}
+    ],
+    "lesson": "A memory-driven action targeting the wrong layer: zero effect, and it consumed 10 minutes of incident time.",
+    "reusable_lesson": "Applying the Redis pool playbook to orders-api was ineffective: the cache pool was at 41/100 while the Postgres pool was at 200/200. Always confirm which pool is saturated before applying a remembered runbook."
+  },
+  "add_index": {
+    "outcome": "helped",
+    "helped": true,
+    "resolves": true,
+    "next_stage": "resolved",
+    "detail": "CREATE INDEX CONCURRENTLY on order_items(customer_id) plus ANALYZE dropped the query from 4.2s to 190ms; connections drained to 61/200 and 5xx fell to 0.3%.",
+    "projection": [
+      {"t": "0s", "http_5xx_pct": 18.4, "postgres_connections_active": 200, "db_query_p95_ms": 4210},
+      {"t": "120s", "http_5xx_pct": 3.0, "postgres_connections_active": 140, "db_query_p95_ms": 320},
+      {"t": "300s", "http_5xx_pct": 0.3, "postgres_connections_active": 61, "db_query_p95_ms": 190}
+    ],
+    "lesson": "Indexing the joined table fixed the slow query and released the pool immediately.",
+    "reusable_lesson": "When postgres connections are exhausted by a slow scan, CREATE INDEX CONCURRENTLY on the scanned column plus ANALYZE releases the pool in minutes - prefer this over restarts or pool resizing."
+  },
+  "kill_long_running_queries": {
+    "outcome": "helped",
+    "helped": true,
+    "resolves": true,
+    "next_stage": "resolved",
+    "detail": "Terminating the 4.2s queries freed ~180 connections immediately (fail rate 18.4% -> 4.1%) but throughput stayed poor until the index was added, so it is a mitigation that needs a follow-up.",
+    "projection": [
+      {"t": "0s", "http_5xx_pct": 18.4, "postgres_connections_active": 200, "db_query_p95_ms": 4210},
+      {"t": "60s", "http_5xx_pct": 4.1, "postgres_connections_active": 74, "db_query_p95_ms": 3900}
+    ],
+    "lesson": "Killing long queries restores capacity but not performance; the slow query keeps coming back.",
+    "reusable_lesson": "Terminating long-running queries in postgres-orders is a useful emergency lever for connection saturation, but it must be followed by a query fix (index or plan) or the incident returns."
+  },
+  "rollback_recent_deploy": {
+    "outcome": "helped",
+    "helped": true,
+    "resolves": true,
+    "next_stage": "resolved",
+    "detail": "Rolling back v4.9.2 removed the analytics join from the default order search path; query p95 fell to 240ms and the pool recovered to 70/200.",
+    "projection": [
+      {"t": "0s", "http_5xx_pct": 18.4, "postgres_connections_active": 200, "db_query_p95_ms": 4210},
+      {"t": "180s", "http_5xx_pct": 0.8, "postgres_connections_active": 70, "db_query_p95_ms": 240}
+    ],
+    "lesson": "The deploy was genuinely implicated here (40 minutes before onset, query-plan change), so the rollback was the right call.",
+    "reusable_lesson": "For orders-api, a release that enables analytics joins on the order search path is a real cause of slow-query connection saturation; rolling it back restores p95 to ~240ms. Confirm the plan change before rolling back, unlike the payment-api cases where the deploy was a lead rather than the cause."
+  },
+  "failover_database": {
+    "outcome": "hurt",
+    "helped": false,
+    "resolves": false,
+    "next_stage": "saturation",
+    "detail": "HIGH RISK: failing over postgres-orders would drop 200 in-flight transactions and require a replica that is 9 minutes behind. Refused by the safety gate; the warning is displayed instead of an execution plan.",
+    "projection": [
+      {"t": "0s", "http_5xx_pct": 18.4, "postgres_connections_active": 200, "db_query_p95_ms": 4210},
+      {"t": "30s", "http_5xx_pct": 35.0, "postgres_connections_active": 0, "db_query_p95_ms": 0}
+    ],
+    "lesson": "Database failover during connection saturation converts a degraded service into data-loss risk; never automated.",
+    "reusable_lesson": "Do not fail over postgres-orders to fix connection saturation: the replica is behind and it would drop in-flight transactions. A slow query is not a database outage."
+  }
+}

@@ -1,0 +1,44 @@
+[
+  {
+    "id": "alert",
+    "label": "External dependency alert",
+    "offset_s": 0,
+    "description": "504s on checkout confirm, caused by the external fraud-scoring call.",
+    "evidence": [
+      {"id": "C1-ALERT", "kind": "alert", "source": "datadog-monitor", "title": "checkout-web: fraud-scoring-eu upstream timeout", "detail": "POST /v2/checkout/confirm blocks on the external fraud-scoring call (upstream timeout after 8000ms). External dependency timeout rate 38% for 2m.", "ts_offset_s": 0, "raw": {"monitor": "dependency_timeout", "provider": "fraud-scoring-eu", "timeout_pct": 38.0, "error_rate_pct": 6.1, "team": "checkout"}},
+      {"id": "C1-HEALTH", "kind": "service_health", "source": "service-catalog", "title": "checkout-web degraded; fraud-scoring-eu unhealthy; all internal dependencies healthy", "detail": "checkout-web status=degraded. fraud-scoring-eu status=unhealthy (38% timeout rate, p95 8020ms, provider status page confirms partial outage). redis-cache 1.0ms, postgres-orders 8.0ms - both healthy.", "ts_offset_s": 0, "raw": {"service": "checkout-web", "status": "degraded", "unhealthy_dependencies": ["fraud-scoring-eu"], "healthy_dependencies": ["redis-cache", "postgres-orders", "psp-acquirer-eu"]}}
+    ],
+    "unlocks": ["inspect_error_rate", "inspect_service_health", "inspect_dependency_health", "inspect_recent_deploy"],
+    "hint": "The dependency graph already answers this. Do not restart anything yet."
+  },
+  {
+    "id": "provider_degraded",
+    "label": "Provider degradation confirmed",
+    "offset_s": 26,
+    "description": "Provider timeout rate and retries confirmed; the rest of the system is idle and healthy.",
+    "evidence": [
+      {"id": "C1-PROVIDER", "kind": "simulation", "source": "agent-simulation", "title": "fraud-scoring-eu degraded: 38% timeouts, p95 8020ms, circuit breaker half-open", "detail": "The circuit breaker is half-open so retries keep hitting a failing provider. Internal CPU is 41% (baseline 39%) and the entire 8.1s latency is the provider call.", "ts_offset_s": 26, "raw": {"diagnostic": true, "provider": "fraud-scoring-eu", "timeout_pct": 38.0, "latency_p95_ms": 8020, "circuit_breaker": "half_open"}},
+      {"id": "C1-NO-DEPLOY", "kind": "deployment", "source": "deploy-pipeline", "title": "No deployment in the incident window (last release v3.4.1, 3 days ago)", "detail": "No checkout-web release in the last 72 hours. The v3.4.1 deploy is outside the correlation window and cannot explain a 07:05 incident.", "ts_offset_s": 12, "raw": {"service": "checkout-web", "version": "v3.4.1", "minutes_before": 4320, "in_window": false, "correlation": 0.05}},
+      {"id": "C1-INTERNAL-HEALTHY", "kind": "service_health", "source": "redis-exporter", "title": "Internal stores healthy: redis 52/100, postgres 61/200", "detail": "Neither the cache nor the database is anywhere near saturation, which contradicts the recalled pool-exhaustion precedents from payment-api and orders-api.", "ts_offset_s": 16, "raw": {"redis_connections_active": 52, "redis_limit": 100, "postgres_connections_active": 61, "postgres_limit": 200, "contradicts_precedent": true}}
+    ],
+    "unlocks": ["enable_degraded_mode", "isolate_dependency", "increase_timeout", "restart_api_pool", "rollback_recent_deploy", "inspect_retry_config"],
+    "hint": "Nothing internal is wrong. Choose a mitigation that bypasses or fails fast against the provider."
+  },
+  {
+    "id": "resolved",
+    "label": "Service recovered (degraded mode)",
+    "offset_s": 90,
+    "description": "Checkout flows again with fraud scoring deferred to async review.",
+    "evidence": [
+      {"id": "C1-RESOLVED", "kind": "outcome", "source": "agent-simulation", "title": "Resolved: checkout confirm p95 610ms, 504 rate 0.1%", "detail": "Degraded mode enabled: fraud scoring skipped, orders flagged for async review, circuit breaker open for fraud-scoring-eu. No code change deployed.", "ts_offset_s": 90, "raw": {"diagnostic": true, "resolved": true, "http_5xx_pct": 0.1, "latency_p95_ms": 610, "mitigation": "degraded_mode"}}
+    ],
+    "metrics": [
+      {"name": "http_5xx_pct", "label": "HTTP 5xx rate", "value": 0.1, "unit": "percent", "baseline": 0.4, "limit": 5.0, "ts_offset_s": 90},
+      {"name": "http_504_pct", "label": "HTTP 504 rate", "value": 0.0, "unit": "percent", "baseline": 0.1, "limit": 2.0, "ts_offset_s": 90},
+      {"name": "latency_p95_ms", "label": "Checkout confirm p95", "value": 610, "unit": "ms", "baseline": 590, "limit": 2000, "ts_offset_s": 90},
+      {"name": "fraud_provider_timeout_pct", "label": "fraud-scoring-eu timeout rate", "value": 0.0, "unit": "percent", "baseline": 0.2, "limit": 5.0, "ts_offset_s": 90}
+    ],
+    "unlocks": [],
+    "hint": "Stable with an accepted risk (async fraud review). Write up the lesson: never raise a timeout to fix a dead provider."
+  }
+]

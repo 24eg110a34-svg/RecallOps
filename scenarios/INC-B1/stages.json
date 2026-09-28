@@ -1,0 +1,65 @@
+[
+  {
+    "id": "alert",
+    "label": "Latency alert on orders-api",
+    "offset_s": 0,
+    "description": "Order creation p95 6.4s with 503s and Postgres refusing connections.",
+    "evidence": [
+      {"id": "B1-ALERT", "kind": "alert", "source": "datadog-monitor", "title": "orders-api: order creation latency 6.4s p95 with 503s", "detail": "POST /v2/orders is timing out: p95 6.4s (baseline 180ms), 503 responses and 'too many clients already' errors from Postgres. Monitor: orders_api.dependency_timeouts{service=orders-api}.", "ts_offset_s": 0, "raw": {"monitor": "request_latency", "error_rate_pct": 18.4, "baseline_pct": 0.3, "p95_ms": 6400, "team": "orders"}},
+      {"id": "B1-DEPLOY", "kind": "deployment", "source": "deploy-pipeline", "title": "orders-api v4.9.2 deployed 40 minutes before the alert", "detail": "Order export feature: analytics joins enabled by default on the order search path. Deployed by @p.novak, 18 files changed, medium risk.", "ts_offset_s": -2400, "raw": {"service": "orders-api", "version": "v4.9.2", "minutes_before": 40, "author": "@p.novak", "risk": "medium", "correlation": 0.61}},
+      {"id": "B1-HEALTH", "kind": "service_health", "source": "service-catalog", "title": "orders-api degraded; postgres-orders unhealthy", "detail": "orders-api status=degraded. postgres-orders status=unhealthy: 200/200 connections, 'too many clients already', slow query on order_items. redis-cache healthy at 41/100 clients.", "ts_offset_s": 0, "raw": {"service": "orders-api", "status": "degraded", "unhealthy_dependencies": ["postgres-orders"], "healthy_dependencies": ["redis-cache", "inventory-svc"]}}
+    ],
+    "unlocks": ["inspect_error_rate", "inspect_recent_deploy", "inspect_service_health", "inspect_dependency_health", "inspect_db_connections"],
+    "hint": "Which pool is actually saturated? Check the database before assuming the cache."
+  },
+  {
+    "id": "saturation",
+    "label": "Database pool saturation",
+    "offset_s": 36,
+    "description": "The Postgres pool is full and one query is holding connections for 4.2 seconds.",
+    "evidence": [
+      {"id": "B1-DBPOOL", "kind": "simulation", "source": "agent-simulation", "title": "DB pool saturated: acquired 200/200, queued 143, wait p95 4180ms", "detail": "orders-api has 200 acquired connections and 143 requests queued. Postgres reports max_connections reached; 9 sessions are waiting on Lock.", "ts_offset_s": 36, "raw": {"diagnostic": true, "name": "postgres_connections_active", "value": 200, "limit": 200, "queued": 143, "db_pool_wait_ms": 4180}},
+      {"id": "B1-SLOWQUERY", "kind": "log", "source": "orders-api.db", "title": "Slow query: orders_search_by_customer avg 4.2s (seq scan on order_items)", "detail": "pg_stat_statements top total_time = SELECT * FROM orders o JOIN order_items ... WHERE o.customer_id = $1, avg 4210ms. EXPLAIN shows a seq scan; order_items was last analyzed 9 days ago.", "ts_offset_s": 30, "raw": {"level": "WARN", "logger": "postgres-orders", "query": "orders_search_by_customer", "avg_ms": 4210, "seq_scan": true, "last_analyze_days": 9, "diagnostic": true}},
+      {"id": "B1-CACHE-HEALTHY", "kind": "service_health", "source": "redis-exporter", "title": "redis-cache healthy: 41/100 clients, 1.1ms p95, zero cache failures", "detail": "orders-api logged no cache acquisition failures for this incident window. The cache is not involved.", "ts_offset_s": 24, "raw": {"service": "redis-cache", "status": "healthy", "redis_connections_active": 41, "redis_cpu_utilization_pct": 14, "misleading": false, "contradicts_precedent": true}}
+    ],
+    "metrics": [
+      {"name": "postgres_connections_active", "label": "Postgres connections", "value": 200, "unit": "count", "baseline": 88, "limit": 200, "ts_offset_s": 36},
+      {"name": "db_query_p95_ms", "label": "DB query p95", "value": 4210, "unit": "ms", "baseline": 42, "limit": 500, "ts_offset_s": 36},
+      {"name": "db_pool_wait_ms", "label": "DB pool wait p95", "value": 4180, "unit": "ms", "baseline": 5, "limit": 100, "ts_offset_s": 36}
+    ],
+    "unlocks": ["inspect_db_connections", "inspect_query_stats", "kill_long_running_queries", "add_index", "rollback_recent_deploy", "restart_api_pool", "increase_redis_pool_size", "failover_database", "scale_out_workers"],
+    "hint": "The cache is healthy. The historical Redis playbook is contradicted by current evidence - say so explicitly instead of reusing it."
+  },
+  {
+    "id": "restart_result",
+    "label": "Restart mitigation applied",
+    "offset_s": 70,
+    "description": "Reachable only by executing the restart action. No improvement at all.",
+    "evidence": [
+      {"id": "B1-RESTART-EFFECT", "kind": "simulation", "source": "agent-simulation", "title": "After rolling restart: acquired 200/200 again within 25s, no change in failure rate", "detail": "New workers re-established 200 connections onto the same 4.2s query. Postgres refused the remaining slots; failure rate unchanged at 18.4%.", "ts_offset_s": 70, "raw": {"diagnostic": true, "follows_action": "restart_api_pool", "reachable_by_waiting": true, "http_5xx_pct": 18.4, "postgres_connections_active": 200, "durable": false, "effective": false}}
+    ],
+    "metrics": [
+      {"name": "http_5xx_pct", "label": "HTTP 5xx rate", "value": 18.4, "unit": "percent", "baseline": 0.3, "limit": 5.0, "ts_offset_s": 70},
+      {"name": "postgres_connections_active", "label": "Postgres connections", "value": 200, "unit": "count", "baseline": 88, "limit": 200, "ts_offset_s": 70}
+    ],
+    "unlocks": ["inspect_query_stats", "add_index", "kill_long_running_queries", "rollback_recent_deploy", "restart_api_pool"],
+    "hint": "The mitigation had no effect because the constraint is the query, not the process."
+  },
+  {
+    "id": "resolved",
+    "label": "Service recovered",
+    "offset_s": 125,
+    "description": "Index added and analytics join disabled, service stable.",
+    "evidence": [
+      {"id": "B1-RESOLVED", "kind": "outcome", "source": "agent-simulation", "title": "Resolved: query p95 190ms, pool 61/200, 5xx 0.3%", "detail": "orders_search_by_customer p95 190ms after CREATE INDEX CONCURRENTLY idx_order_items_customer plus ANALYZE. Connection pool stable at 61/200.", "ts_offset_s": 125, "raw": {"diagnostic": true, "resolved": true, "http_5xx_pct": 0.3, "postgres_connections_active": 61, "db_query_p95_ms": 190}}
+    ],
+    "metrics": [
+      {"name": "http_5xx_pct", "label": "HTTP 5xx rate", "value": 0.3, "unit": "percent", "baseline": 0.3, "limit": 5.0, "ts_offset_s": 125},
+      {"name": "db_query_p95_ms", "label": "DB query p95", "value": 190, "unit": "ms", "baseline": 42, "limit": 500, "ts_offset_s": 125},
+      {"name": "postgres_connections_active", "label": "Postgres connections", "value": 61, "unit": "count", "baseline": 88, "limit": 200, "ts_offset_s": 125},
+      {"name": "latency_p95_ms", "label": "Request p95 latency", "value": 190, "unit": "ms", "baseline": 180, "limit": 2000, "ts_offset_s": 125}
+    ],
+    "unlocks": [],
+    "hint": "Stable. The lesson to retain: the recalled Redis precedent was contradicted, and the database pool was the real constraint."
+  }
+]

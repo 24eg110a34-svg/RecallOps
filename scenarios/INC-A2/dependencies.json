@@ -1,0 +1,8 @@
+[
+  {"name": "web-frontend", "kind": "internal", "direction": "upstream", "status": "healthy", "criticality": "important", "latency_p95_ms": 95, "error_rate_pct": 0.1, "note": "checkout UI"},
+  {"name": "api-gateway", "kind": "internal", "direction": "upstream", "status": "healthy", "criticality": "critical", "latency_p95_ms": 48, "error_rate_pct": 0.2, "note": "routes /v2/*"},
+  {"name": "payment-api", "kind": "internal", "direction": "self", "status": "degraded", "criticality": "critical", "latency_p95_ms": 3900, "error_rate_pct": 14.0, "note": "impacted service"},
+  {"name": "redis-cache", "kind": "datastore", "direction": "downstream", "status": "healthy", "criticality": "critical", "latency_p95_ms": 1.4, "error_rate_pct": 0.0, "note": "server healthy; client pool at max again"},
+  {"name": "postgres-orders", "kind": "datastore", "direction": "downstream", "status": "healthy", "criticality": "critical", "latency_p95_ms": 9.1, "error_rate_pct": 0.0, "note": "healthy"},
+  {"name": "psp-acquirer-eu", "kind": "external", "direction": "downstream", "status": "degraded", "criticality": "critical", "latency_p95_ms": 480, "error_rate_pct": 0.4, "note": "latency elevated but well inside its own SLO; contributes retries, not the outage"}
+]

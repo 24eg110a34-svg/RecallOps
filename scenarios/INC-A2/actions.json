@@ -1,0 +1,85 @@
+{
+  "restart_api_pool": {
+    "outcome": "temporary_improvement",
+    "helped": null,
+    "resolves": false,
+    "next_stage": "restart_result",
+    "detail": "Rolling restart dropped failures to about 18% for 40 seconds; the pool refilled on the same v2.18.1 build and the incident returned.",
+    "projection": [
+      {"t": "0s", "http_5xx_pct": 14.0, "redis_connections_active": 150, "redis_pool_wait_ms": 690},
+      {"t": "25s", "http_5xx_pct": 5.0, "redis_connections_active": 74, "redis_pool_wait_ms": 60},
+      {"t": "55s", "http_5xx_pct": 12.0, "redis_connections_active": 143, "redis_pool_wait_ms": 520},
+      {"t": "95s", "http_5xx_pct": 24.0, "redis_connections_active": 150, "redis_pool_wait_ms": 730}
+    ],
+    "regression_after_s": 40,
+    "lesson": "Restarting payment-api again produced a 40 second dip and then regression - the second time, the previous incident's lesson was already in memory.",
+    "reusable_lesson": "Second confirmation: restarting payment-api workers during a Redis pool exhaustion incident is a temporary mitigation (5xx 14% -> 5% for ~40s) followed by regression to 24%. Stop retrying it and go to the pool diagnostic or rollback.",
+    "warning": "Previous similar incident: restarting API pods produced only temporary improvement and regression."
+  },
+  "rollback_recent_deploy": {
+    "outcome": "helped",
+    "helped": true,
+    "resolves": true,
+    "next_stage": "resolved",
+    "detail": "Rolled back to v2.18.0 and raised the client pool to 200. Failures cleared within 3 minutes, pool at 71/200, no 502/503.",
+    "projection": [
+      {"t": "0s", "http_5xx_pct": 14.0, "redis_connections_active": 150, "redis_pool_wait_ms": 690},
+      {"t": "90s", "http_5xx_pct": 2.0, "redis_connections_active": 92, "redis_pool_wait_ms": 40},
+      {"t": "180s", "http_5xx_pct": 0.6, "redis_connections_active": 71, "redis_pool_wait_ms": 2}
+    ],
+    "lesson": "Rollback of the release that touched the client lifecycle resolved the second occurrence too.",
+    "reusable_lesson": "Rolling back the release that changed the checkout client lifecycle resolved payment-api Redis pool exhaustion in both INC-A1 and INC-A2; confirm the suspect release with the deploy diff before rolling back."
+  },
+  "increase_redis_pool_size": {
+    "outcome": "helped",
+    "helped": true,
+    "resolves": true,
+    "next_stage": "resolved",
+    "detail": "Raising the client pool from 150 to 200 with a 250ms acquisition timeout cleared the backlog, but the leak is still shipping - flagged as a mitigation with a follow-up required.",
+    "projection": [
+      {"t": "0s", "http_5xx_pct": 14.0, "redis_connections_active": 150, "redis_pool_wait_ms": 690},
+      {"t": "120s", "http_5xx_pct": 2.4, "redis_connections_active": 163, "redis_pool_wait_ms": 35}
+    ],
+    "lesson": "More headroom bought time; the leak remains and will recur (third occurrence already predicted by the service pattern).",
+    "reusable_lesson": "Raising the payment-api client pool clears a Redis pool exhaustion incident temporarily, but as long as the leaking release is deployed the pool saturates again - always pair it with a rollback or a leak fix."
+  },
+  "scale_out_workers": {
+    "outcome": "hurt",
+    "helped": false,
+    "resolves": false,
+    "next_stage": "regression",
+    "detail": "Scaling out doubled the connection demand: 150 per worker against a Redis maxclients ceiling, failures rose to 26%.",
+    "projection": [
+      {"t": "0s", "http_5xx_pct": 14.0, "redis_connections_active": 150, "redis_pool_wait_ms": 690},
+      {"t": "150s", "http_5xx_pct": 26.0, "redis_connections_active": 150, "redis_pool_wait_ms": 880}
+    ],
+    "lesson": "Per-worker pool sizing means scaling out accelerates pool exhaustion.",
+    "reusable_lesson": "Do not scale payment-api out to fight a Redis pool exhaustion incident: the client pool is per worker, so more workers exhaust the shared Redis faster (INC-A1 and INC-A2 both made this worse)."
+  },
+  "isolate_dependency": {
+    "outcome": "no_effect",
+    "helped": null,
+    "resolves": false,
+    "next_stage": "pool_saturation",
+    "detail": "Isolating the PSP dependency had no measurable effect on failures: the cache pool, not the PSP, is blocking the checkout path. It does reduce retry amplification (PSP retries 640 -> 90).",
+    "projection": [
+      {"t": "0s", "http_5xx_pct": 14.0, "redis_connections_active": 150, "redis_pool_wait_ms": 690},
+      {"t": "90s", "http_5xx_pct": 14.0, "redis_connections_active": 150, "redis_pool_wait_ms": 690}
+    ],
+    "lesson": "Degraded PSP latency was a real distractor: isolating it reduced retries but not failures.",
+    "reusable_lesson": "In payment-api checkout incidents, an elevated PSP latency can be a distractor - isolating the PSP reduces retry load but does not change the failure rate when the client Redis pool is saturated."
+  },
+  "flush_cache": {
+    "outcome": "hurt",
+    "helped": false,
+    "resolves": false,
+    "next_stage": "regression",
+    "detail": "High-risk action: a cart cache flush would destroy in-flight checkouts and raise duplicate-charge risk. Blocked by the safety gate by default.",
+    "projection": [
+      {"t": "0s", "http_5xx_pct": 14.0, "redis_connections_active": 150, "redis_pool_wait_ms": 690},
+      {"t": "10s", "http_5xx_pct": 22.0, "redis_connections_active": 150, "redis_pool_wait_ms": 800}
+    ],
+    "lesson": "Destructive and pointless for a client-side pool leak.",
+    "reusable_lesson": "Never flush the payment-api cart cache as remediation: it destroys in-flight checkout state and does not fix a client-side connection leak."
+  }
+}

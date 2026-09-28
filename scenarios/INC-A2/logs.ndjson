@@ -1,0 +1,16 @@
+{"ts_offset_s": 0, "level": "ERROR", "logger": "payment-api.checkout", "message": "cache acquisition timed out after 4000ms on key=cart:session:2ac9 (checkout flow)", "count": 913, "stage": "alert"}
+{"ts_offset_s": 3, "level": "ERROR", "logger": "payment-api.http", "message": "POST /v2/checkout/confirm -> 502 Bad Gateway (cache_gateway)", "count": 287, "stage": "alert"}
+{"ts_offset_s": 6, "level": "ERROR", "logger": "payment-api.http", "message": "POST /v2/checkout/confirm -> 503 Service Unavailable (upstream cache_gateway)", "count": 341, "stage": "alert"}
+{"ts_offset_s": 9, "level": "WARN", "logger": "payment-api.pool", "message": "client pool saturated: acquired=150/150 queued=58 wait_p95=690ms", "count": 22, "stage": "alert"}
+{"ts_offset_s": 12, "level": "INFO", "logger": "deploy.payments", "message": "payment-api v2.18.1 deployed 6 minutes before the alert (settlement metadata prefetch on checkout path)", "count": 1, "stage": "alert"}
+{"ts_offset_s": 15, "level": "WARN", "logger": "payment-api.psp", "message": "psp-acquirer-eu latency 480ms p95 (elevated, was 210ms) - retries 2 per request", "count": 640, "stage": "alert"}
+{"ts_offset_s": 18, "level": "INFO", "logger": "redis-cache-1", "message": "redis healthy: cpu 22%, used_memory 508MB, connected_clients 150", "count": 1, "stage": "alert"}
+{"ts_offset_s": 22, "level": "ERROR", "logger": "payment-api.cache", "message": "cache acquisition timed out (again) for 3 consecutive attempts, giving up", "count": 512, "stage": "pool_saturation"}
+{"ts_offset_s": 26, "level": "WARN", "logger": "payment-api.worker", "message": "connection not released back to pool (settlement path) open_connections=1402", "count": 233, "stage": "pool_saturation"}
+{"ts_offset_s": 30, "level": "INFO", "logger": "payment-api.pool", "message": "pool wait time rising monotonically for 4 minutes, no sign of self-recovery", "count": 8, "stage": "pool_saturation"}
+{"ts_offset_s": 34, "level": "WARN", "logger": "payment-api.checkout", "message": "checkout success rate 71.4% (baseline 99.0%); customers retrying, duplicate-charge risk raised", "count": 9, "stage": "pool_saturation"}
+{"ts_offset_s": 60, "level": "INFO", "logger": "payment-api.pool", "message": "after rolling restart: 5xx 18% for 40s, then pool saturated again (same build v2.18.1)", "count": 14, "stage": "restart_result"}
+{"ts_offset_s": 92, "level": "ERROR", "logger": "payment-api.cache", "message": "cache acquisition timed out - incident back to 24% failures after restart", "count": 1104, "stage": "regression"}
+{"ts_offset_s": 140, "level": "INFO", "logger": "deploy.payments", "message": "payment-api rolled back to v2.18.0, pool max_connections raised to 200", "count": 1, "stage": "resolved"}
+{"ts_offset_s": 150, "level": "INFO", "logger": "payment-api.pool", "message": "client pool acquired=71/200, wait_p95 2ms, open_connections 0", "count": 5, "stage": "resolved"}
+{"ts_offset_s": 158, "level": "INFO", "logger": "payment-api.checkout", "message": "checkout success 99.1%, mixed 502/503 gone", "count": 2, "stage": "resolved"}

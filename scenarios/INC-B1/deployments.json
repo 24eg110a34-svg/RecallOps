@@ -1,0 +1,5 @@
+[
+  {"version": "v4.9.2", "deployed_at_offset_s": -2400, "author": "@p.novak", "change_summary": "Order export feature: analytics joins enabled by default on the order search path", "status": "current", "risk": "medium", "files_changed": 18, "tags": ["orders", "export", "joins"]},
+  {"version": "v4.9.1", "deployed_at_offset_s": -172800, "author": "@p.novak", "change_summary": "Pessimistic locking on inventory reservation", "status": "healthy", "risk": "low", "files_changed": 7, "tags": ["inventory"]},
+  {"version": "v4.9.0", "deployed_at_offset_s": -345600, "author": "@j.laurent", "change_summary": "Postgres client 0.30 -> 0.30.1", "status": "healthy", "risk": "low", "files_changed": 2, "tags": ["deps"]}
+]

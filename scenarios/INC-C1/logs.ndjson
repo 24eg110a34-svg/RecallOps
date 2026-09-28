@@ -1,0 +1,10 @@
+{"ts_offset_s": 0, "level": "ERROR", "logger": "checkout-web.fraud", "message": "upstream timeout calling fraud-scoring-eu after 8000ms (POST /v1/score)", "count": 733, "stage": "alert"}
+{"ts_offset_s": 4, "level": "WARN", "logger": "checkout-web.fraud", "message": "retry 2/2 to fraud-scoring-eu, adding 8s to checkout latency", "count": 512, "stage": "alert"}
+{"ts_offset_s": 8, "level": "ERROR", "logger": "checkout-web.http", "message": "POST /v2/checkout/confirm -> 504 Gateway Timeout (fraud-scoring-eu)", "count": 268, "stage": "alert"}
+{"ts_offset_s": 12, "level": "INFO", "logger": "checkout-web", "message": "no deployment in the last 72 hours (last release v3.4.1, 3 days ago)", "count": 1, "stage": "alert"}
+{"ts_offset_s": 16, "level": "INFO", "logger": "checkout-web.cache", "message": "redis-cache healthy: acquired 52/100, latency 1.0ms; postgres-orders healthy 8ms p95", "count": 1, "stage": "provider_degraded"}
+{"ts_offset_s": 20, "level": "WARN", "logger": "checkout-web.fraud", "message": "circuit_breaker half-open, 38% of fraud-scoring-eu calls timing out", "count": 141, "stage": "provider_degraded"}
+{"ts_offset_s": 26, "level": "ERROR", "logger": "checkout-web.fraud", "message": "external_api fraud-scoring-eu degraded: p95 8020ms, timeout rate 38%", "count": 388, "stage": "provider_degraded"}
+{"ts_offset_s": 34, "level": "WARN", "logger": "checkout-web", "message": "checkout-web CPU 41% (baseline 39%), p95 8.1s entirely explained by the provider call", "count": 2, "stage": "provider_degraded"}
+{"ts_offset_s": 80, "level": "INFO", "logger": "checkout-web.fraud", "message": "degraded mode enabled: fraud scoring skipped, orders flagged for async review", "count": 1, "stage": "resolved"}
+{"ts_offset_s": 90, "level": "INFO", "logger": "checkout-web.http", "message": "checkout confirm p95 610ms, 504 rate 0.1%", "count": 1, "stage": "resolved"}

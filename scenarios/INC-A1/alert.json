@@ -1,0 +1,18 @@
+{
+  "alert_id": "ALR-7741",
+  "monitor": "http_5xx_ratio{service=payment-api,env=prod}",
+  "title": "payment-api: HTTP 5xx ratio above 5% for 3m (SEV-1 page)",
+  "symptom": "HTTP 503 rate increased from 0.4% to 31% over six minutes; checkout completion rate dropped from 99.1% to 68%.",
+  "fired_at_offset_s": 0,
+  "threshold": "5xx_ratio > 5% for 3m",
+  "runbook": "https://runbooks.internal/payments/payment-api-5xx",
+  "labels": {
+    "env": "prod",
+    "region": "eu-west-1",
+    "team": "payments",
+    "service": "payment-api",
+    "severity_hint": "SEV-1",
+    "dashboard": "https://grafana.internal/d/payment-api-overview"
+  },
+  "notes": "Pager fired automatically. The linked runbook's first step is 'restart the payment-api pods', which is why most responders start there."
+}

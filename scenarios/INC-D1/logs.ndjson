@@ -1,0 +1,11 @@
+{"ts_offset_s": 0, "level": "WARN", "logger": "catalog-api.cpu", "message": "CPU throttling active: 97% utilization, 31% of requests throttled", "count": 1, "stage": "alert"}
+{"ts_offset_s": 4, "level": "ERROR", "logger": "catalog-api.db", "message": "N+1 detected: per-item query executed for cart_items_query, 1180 queries for a single category page (select performed for each item, lazy load)", "count": 421, "stage": "alert"}
+{"ts_offset_s": 8, "level": "WARN", "logger": "catalog-api.http", "message": "GET /v2/categories/{id}/items p95 8900ms (baseline 210ms), 504 on 4.1% of requests", "count": 233, "stage": "alert"}
+{"ts_offset_s": 12, "level": "INFO", "logger": "deploy.catalog", "message": "catalog-api v5.2.0 deployed 11 minutes before the alert (removed ProductVariant prefetch, switched to lazy loading in the serializer)", "count": 1, "stage": "alert"}
+{"ts_offset_s": 18, "level": "WARN", "logger": "postgres-catalog", "message": "db CPU 96% (baseline 28%), 41k queries/min from catalog-api (baseline 900/min)", "count": 88, "stage": "query_storm"}
+{"ts_offset_s": 22, "level": "INFO", "logger": "catalog-api.cache", "message": "redis-cache healthy: acquired 77/100, latency 1.3ms, no cache errors", "count": 1, "stage": "query_storm"}
+{"ts_offset_s": 28, "level": "ERROR", "logger": "catalog-api.db", "message": "connection pool wait rising (acquired 96/120) as a side effect of the query storm, not a pool bug", "count": 64, "stage": "query_storm"}
+{"ts_offset_s": 36, "level": "WARN", "logger": "catalog-api.cpu", "message": "profile: 71% of CPU in ORM row hydration for ProductVariant (per-item select)", "count": 1, "stage": "query_storm"}
+{"ts_offset_s": 70, "level": "INFO", "logger": "catalog-api.cpu", "message": "after rolling restart: CPU back to 97% within 30s, same build deployed", "count": 1, "stage": "restart_result"}
+{"ts_offset_s": 150, "level": "INFO", "logger": "deploy.catalog", "message": "catalog-api rolled back to v5.1.4 (prefetch restored)", "count": 1, "stage": "resolved"}
+{"ts_offset_s": 162, "level": "INFO", "logger": "catalog-api.cpu", "message": "CPU 31%, queries/min 940, category page p95 230ms", "count": 2, "stage": "resolved"}

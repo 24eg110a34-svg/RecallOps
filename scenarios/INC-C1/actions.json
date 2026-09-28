@@ -1,0 +1,80 @@
+{
+  "enable_degraded_mode": {
+    "outcome": "helped",
+    "helped": true,
+    "resolves": true,
+    "next_stage": "resolved",
+    "detail": "Synchronous fraud scoring disabled, orders flagged for async review. Checkout confirm p95 610ms, 504 rate 0.1%. Risk traded: ~4% of orders need manual review.",
+    "projection": [
+      {"t": "0s", "http_5xx_pct": 6.1, "latency_p95_ms": 8100, "fraud_provider_timeout_pct": 38.0},
+      {"t": "60s", "http_5xx_pct": 0.1, "latency_p95_ms": 610, "fraud_provider_timeout_pct": 2.0}
+    ],
+    "lesson": "Trading synchronous fraud scoring for an async review queue restored checkout immediately.",
+    "reusable_lesson": "When fraud-scoring-eu is degraded, enabling checkout-web degraded mode (async fraud review) restores checkout p95 to under a second within a minute. This is the correct mitigation for a third-party timeout; a restart or rollback is wasted time."
+  },
+  "isolate_dependency": {
+    "outcome": "helped",
+    "helped": true,
+    "resolves": true,
+    "next_stage": "resolved",
+    "detail": "Circuit breaker fully opened for fraud-scoring-eu: calls fail fast, retries stop, and the fallback path returns immediately. Same end state as degraded mode with a smaller code change.",
+    "projection": [
+      {"t": "0s", "http_5xx_pct": 6.1, "latency_p95_ms": 8100, "fraud_provider_timeout_pct": 38.0},
+      {"t": "45s", "http_5xx_pct": 0.2, "latency_p95_ms": 700, "fraud_provider_timeout_pct": 0.0}
+    ],
+    "lesson": "Failing fast on a dead provider is equivalent to bypassing it, and needs no release.",
+    "reusable_lesson": "Opening the circuit breaker for a timing-out third-party provider cuts checkout latency immediately (8.1s -> 0.7s) because requests fail fast into the fallback instead of waiting on 8s timeouts plus retries."
+  },
+  "increase_timeout": {
+    "outcome": "no_effect",
+    "helped": null,
+    "resolves": false,
+    "next_stage": "provider_degraded",
+    "detail": "Raising the provider timeout from 8s to 12s made it worse for customers: 38% of checkouts now take 12s instead of 8s, and the 504 rate barely moved (5.4% -> 5.9%).",
+    "projection": [
+      {"t": "0s", "http_5xx_pct": 6.1, "latency_p95_ms": 8100, "fraud_provider_timeout_pct": 38.0},
+      {"t": "120s", "http_5xx_pct": 5.9, "latency_p95_ms": 12100, "fraud_provider_timeout_pct": 38.0}
+    ],
+    "lesson": "Increasing a timeout against a dead provider converts fast failures into slow failures.",
+    "reusable_lesson": "Never raise a client timeout to 'fix' a timing-out provider: with fraud-scoring-eu timing out at 38%, raising the timeout from 8s to 12s increased checkout p95 to 12s and did not reduce 504s. Bypass or fail fast instead."
+  },
+  "restart_api_pool": {
+    "outcome": "no_effect",
+    "helped": null,
+    "resolves": false,
+    "next_stage": "provider_degraded",
+    "detail": "Restarting checkout-web workers had zero effect: the provider is still timing out, so new pods time out identically. 6 wasted minutes.",
+    "projection": [
+      {"t": "0s", "http_5xx_pct": 6.1, "latency_p95_ms": 8100, "fraud_provider_timeout_pct": 38.0},
+      {"t": "90s", "http_5xx_pct": 6.1, "latency_p95_ms": 8100, "fraud_provider_timeout_pct": 38.0}
+    ],
+    "lesson": "Restarts cannot fix an external outage.",
+    "reusable_lesson": "Restarting checkout-web did nothing during the fraud-scoring-eu outage: 504s and 8s latency were unchanged because the fault is external. Check the dependency graph before restarting anything."
+  },
+  "rollback_recent_deploy": {
+    "outcome": "no_effect",
+    "helped": null,
+    "resolves": false,
+    "next_stage": "provider_degraded",
+    "detail": "Rolling back to the release from three days earlier changed nothing measurable and cost 12 minutes plus a rollback. Deploy correlation requires a deploy inside the incident window.",
+    "projection": [
+      {"t": "0s", "http_5xx_pct": 6.1, "latency_p95_ms": 8100, "fraud_provider_timeout_pct": 38.0},
+      {"t": "180s", "http_5xx_pct": 6.0, "latency_p95_ms": 8100, "fraud_provider_timeout_pct": 37.0}
+    ],
+    "lesson": "Rolling back an unrelated release is superstition, not diagnosis.",
+    "reusable_lesson": "Rolling back checkout-web v3.4.1 (deployed 3 days earlier, outside the correlation window) had no effect on the fraud-scoring-eu outage. Only treat a deploy as a correlate when it landed inside the incident window."
+  },
+  "flush_cache": {
+    "outcome": "hurt",
+    "helped": false,
+    "resolves": false,
+    "next_stage": "provider_degraded",
+    "detail": "HIGH RISK and pointless here: flushing session cache logs out every in-flight shopper. Blocked by the safety gate.",
+    "projection": [
+      {"t": "0s", "http_5xx_pct": 6.1, "latency_p95_ms": 8100, "fraud_provider_timeout_pct": 38.0},
+      {"t": "10s", "http_5xx_pct": 14.0, "latency_p95_ms": 8300, "fraud_provider_timeout_pct": 38.0}
+    ],
+    "lesson": "Destructive with no causal link.",
+    "reusable_lesson": "Flushing the checkout session cache during a third-party outage logs out every shopper and changes nothing about the provider fault."
+  }
+}

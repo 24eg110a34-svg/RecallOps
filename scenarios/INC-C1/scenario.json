@@ -1,0 +1,16 @@
+{
+  "id": "INC-C1",
+  "title": "checkout-web: third-party fraud scoring timing out",
+  "service": "checkout-web",
+  "role": "dependency",
+  "summary": "Everything internal is healthy; the external fraud-scoring provider is timing out. The right move is a degraded-mode fallback, not a restart and not a rollback of an unrelated deploy from three days ago.",
+  "severity_hint": "SEV-2",
+  "service_criticality": "critical",
+  "customer_impact": "moderate",
+  "symptom": "Checkout confirmation takes >8s because the external fraud-scoring call has no answer; customers abandon.",
+  "base_time": "2026-03-11T07:05:00Z",
+  "baseline_error_rate_pct": 0.4,
+  "tags": ["third-party", "timeout", "dependency", "degraded-mode"],
+  "memory_expected": true,
+  "demo_notes": "Proves the memory layer does not over-generalise: no deploy correlation, no pool saturation, and the recalled Redis/Postgres precedents are contradicted by healthy internal dependencies."
+}

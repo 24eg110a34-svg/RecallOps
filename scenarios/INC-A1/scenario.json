@@ -1,0 +1,16 @@
+{
+  "id": "INC-A1",
+  "title": "payment-api 503 storm 14 minutes after v2.17.4",
+  "service": "payment-api",
+  "role": "seed",
+  "summary": "First exposure to the Redis connection-pool exhaustion pattern. The agent has no useful organisational memory here, tries a restart, learns it does not hold, then resolves by rolling back and fixing the pool configuration.",
+  "severity_hint": "SEV-1",
+  "service_criticality": "critical",
+  "customer_impact": "high",
+  "symptom": "HTTP 503 rate increased from 0.4% to 31% and checkout completion collapsed.",
+  "base_time": "2026-02-11T14:00:00Z",
+  "baseline_error_rate_pct": 0.4,
+  "tags": ["redis", "pool-exhaustion", "regression", "seed", "connection-leak"],
+  "memory_expected": false,
+  "demo_notes": "Runbook says 'restart the pods'. That is exactly the trap: the restart is remembered as a failed action for the rest of the demo."
+}

@@ -1,0 +1,16 @@
+.env
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.db
+*.db-journal
+recallops.db
+node_modules/
+.next/
+out/
+dist/
+coverage/
+*.tsbuildinfo
+.DS_Store
+TestResults/

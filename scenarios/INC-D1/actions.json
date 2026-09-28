@@ -1,0 +1,83 @@
+{
+  "restart_api_pool": {
+    "outcome": "temporary_improvement",
+    "helped": null,
+    "resolves": false,
+    "next_stage": "restart_result",
+    "detail": "Restarting catalog-api workers dropped CPU to ~40% for 25 seconds; the same v5.2.0 build was still deployed and CPU returned to 97% within 30 seconds.",
+    "projection": [
+      {"t": "0s", "cpu_utilization_pct": 97, "queries_per_request": 1180, "latency_p95_ms": 8900},
+      {"t": "8s", "cpu_utilization_pct": 41, "queries_per_request": 1180, "latency_p95_ms": 5200},
+      {"t": "30s", "cpu_utilization_pct": 97, "queries_per_request": 1180, "latency_p95_ms": 8900}
+    ],
+    "regression_after_s": 30,
+    "lesson": "Restarting catalog-api gave a 25 second CPU dip and then regression; the leaking code path was still deployed.",
+    "reusable_lesson": "Restarting catalog-api workers during an N+1 CPU saturation incident only resets the symptom for ~25 seconds: CPU fell from 97% to 41% and then returned to 97% on the same build. Roll back the code path instead."
+  },
+  "rollback_recent_deploy": {
+    "outcome": "helped",
+    "helped": true,
+    "resolves": true,
+    "next_stage": "resolved",
+    "detail": "Rolled back to v5.1.4, restoring the ProductVariant prefetch. CPU 31%, queries/min 940, category page p95 230ms.",
+    "projection": [
+      {"t": "0s", "cpu_utilization_pct": 97, "queries_per_request": 1180, "latency_p95_ms": 8900},
+      {"t": "120s", "cpu_utilization_pct": 38, "queries_per_request": 11, "latency_p95_ms": 420},
+      {"t": "300s", "cpu_utilization_pct": 31, "queries_per_request": 11, "latency_p95_ms": 230}
+    ],
+    "lesson": "The deploy was the cause, so the rollback was the fix.",
+    "reusable_lesson": "For catalog-api CPU saturation with an N+1 shape, rolling back the serializer release restores CPU and page latency within two minutes. Confirm with queries-per-request before and after."
+  },
+  "scale_out_workers": {
+    "outcome": "hurt",
+    "helped": false,
+    "resolves": false,
+    "next_stage": "regression",
+    "detail": "Adding 10 workers multiplied the query storm: postgres-catalog CPU hit 100%, DB latency 2.4s, and page latency got worse (14s).",
+    "projection": [
+      {"t": "0s", "cpu_utilization_pct": 97, "queries_per_request": 1180, "latency_p95_ms": 8900},
+      {"t": "180s", "cpu_utilization_pct": 99, "queries_per_request": 1180, "latency_p95_ms": 14000}
+    ],
+    "lesson": "Scaling out a CPU-bound service moves the load to the database and makes the incident worse.",
+    "reusable_lesson": "Never scale out catalog-api during an N+1 CPU incident: 10 extra workers pushed postgres-catalog to 100% CPU and page latency from 8.9s to 14s. Fix the query shape first."
+  },
+  "kill_long_running_queries": {
+    "outcome": "no_effect",
+    "helped": null,
+    "resolves": false,
+    "next_stage": "query_storm",
+    "detail": "Killing long queries freed some connections but the storm refilled them within seconds; CPU and latency were unchanged because the problem is query count, not query duration.",
+    "projection": [
+      {"t": "0s", "cpu_utilization_pct": 97, "queries_per_request": 1180, "latency_p95_ms": 8900},
+      {"t": "120s", "cpu_utilization_pct": 96, "queries_per_request": 1180, "latency_p95_ms": 8600}
+    ],
+    "lesson": "Connection-level mitigation does nothing for a query-count problem.",
+    "reusable_lesson": "Killing long-running queries did not help the catalog-api N+1 incident: the failure is query volume, not query duration. Roll back the change that created the per-item queries."
+  },
+  "add_index": {
+    "outcome": "helped",
+    "helped": true,
+    "resolves": true,
+    "next_stage": "resolved",
+    "detail": "A covering index cut per-item query cost by ~9x and CPU fell to 58%, but the N+1 shape remains, so this is a mitigation with a follow-up required.",
+    "projection": [
+      {"t": "0s", "cpu_utilization_pct": 97, "queries_per_request": 1180, "latency_p95_ms": 8900},
+      {"t": "180s", "cpu_utilization_pct": 58, "queries_per_request": 1180, "latency_p95_ms": 2400}
+    ],
+    "lesson": "Indexing reduces the cost per query but not the number of queries; the leak shape is still there.",
+    "reusable_lesson": "A covering index reduces the impact of the catalog-api N+1 incident (CPU 97% -> 58%) but does not remove the per-item query pattern; prefer the rollback, or land the index together with the prefetch fix."
+  },
+  "flush_cache": {
+    "outcome": "hurt",
+    "helped": false,
+    "resolves": false,
+    "next_stage": "query_storm",
+    "detail": "HIGH RISK: flushing the catalog cache would drop a warm cache and send every request to the database, making the query storm worse. Blocked by the safety gate.",
+    "projection": [
+      {"t": "0s", "cpu_utilization_pct": 97, "queries_per_request": 1180, "latency_p95_ms": 8900},
+      {"t": "30s", "cpu_utilization_pct": 99, "queries_per_request": 2100, "latency_p95_ms": 12000}
+    ],
+    "lesson": "Cache flush during a database-bound incident is actively harmful.",
+    "reusable_lesson": "Flushing the catalog cache during an N+1 incident doubles the database load (queries/min 41k -> 74k) because a warm cache is protecting the database. Never flush a cache that is shielding a saturated datastore."
+  }
+}

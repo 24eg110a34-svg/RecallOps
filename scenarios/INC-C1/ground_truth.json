@@ -1,0 +1,47 @@
+{
+  "root_cause_id": "third_party_timeout",
+  "root_cause": "Third-party fraud-scoring provider (fraud-scoring-eu) partial outage",
+  "root_cause_detail": "fraud-scoring-eu is timing out for 38% of calls in eu-west-1 (confirmed on the provider status page). checkout-web blocks on that call, retries twice and converts the 8s provider latency into 504s for customers. No deploy, no pool saturation, no internal saturation: every internal dependency is healthy.",
+  "confirmed_root_cause": "third_party_timeout",
+  "secondary_cause_id": "",
+  "resolution": "Enabled degraded mode: skip synchronous fraud scoring, flag orders for asynchronous review, and keep the circuit breaker open for the provider. Checkout p95 fell to 610ms. A provider-side status update closed the incident 34 minutes later.",
+  "resolution_summary": "Degraded mode + circuit breaker (no code change)",
+  "verification": "checkout confirm p95 8100ms -> 610ms, 504 rate 5.4% -> 0.1%",
+  "contributing_factors": [
+    "Fraud scoring is called synchronously on the confirmation path with no timeout budget or fallback",
+    "Two retries of an 8s call add 16s of worst-case latency per checkout",
+    "The circuit breaker was half-open rather than fully open, so retries kept hammering a failing provider",
+    "No provider health was on the checkout dashboard, so responders first suspected their own deploys"
+  ],
+  "prevention": [
+    "Make fraud scoring asynchronous by default with a hard 1.2s budget",
+    "Fully open the circuit breaker after 20% timeout rate instead of half-opening",
+    "Put third-party provider health on the checkout dashboard",
+    "Add a synthetic checkout that runs without the provider"
+  ],
+  "runbook_changes": [
+    "Add a first branch: 'is an external provider degraded? check the dependency graph before touching code'",
+    "Document the degraded-mode switch and who may enable it",
+    "Explicitly note that a deploy older than 72h is not a correlate"
+  ],
+  "lessons": [
+    "An external dependency can produce a latency incident that looks like an application fault; the dependency graph decides it in seconds.",
+    "Restarting checkout-web did not help at all - restarting an application cannot fix a provider outage.",
+    "Rolling back a release deployed three days ago was a wasted 12 minutes and would have been pure superstition; deploy correlation has a time window.",
+    "Degraded mode is the correct mitigation when the fault is outside your control: trade a manual review queue for restored checkout."
+  ],
+  "first_checks": [
+    "dependency graph: which downstream is unhealthy",
+    "provider timeout rate and the provider status page",
+    "is there any deploy inside the correlation window (last 60 minutes)",
+    "is the circuit breaker open for the failing provider"
+  ],
+  "successful_action_ids": ["enable_degraded_mode", "isolate_dependency", "increase_timeout", "inspect_dependency_health"],
+  "failed_action_ids": ["restart_api_pool", "rollback_recent_deploy"],
+  "avoid_action_ids": ["restart_api_pool", "rollback_recent_deploy", "scale_out_workers", "flush_cache", "failover_database"],
+  "confirmed_by": "checkout confirm p95 below 1s and 504 rate at baseline while the provider is bypassed",
+  "resolvable_by": ["enable_degraded_mode", "isolate_dependency", "increase_timeout"],
+  "doomed_actions": ["restart_api_pool", "rollback_recent_deploy"],
+  "memory_episode": "INC-C1 (checkout-web, SEV-2): checkout confirm p95 8.1s and 504s because fraud-scoring-eu timed out on 38% of calls (provider partial outage). No deploy inside the window; redis and postgres healthy. Resolved by enabling degraded mode (skip synchronous fraud scoring, async review) plus a fully open circuit breaker. Check first next time: the dependency graph and provider timeout rate, not your own deploys.",
+  "memory_service_pattern": "checkout-web depends on the external provider fraud-scoring-eu synchronously on the checkout confirmation path. Its characteristic failure is a provider partial outage showing as 504s and ~8s latency with healthy internal dependencies. The correct mitigation is degraded mode; restarts and rollbacks do nothing."
+}

@@ -1,0 +1,8 @@
+[
+  {"name": "web-storefront", "kind": "internal", "direction": "upstream", "status": "healthy", "criticality": "important", "latency_p95_ms": 60, "error_rate_pct": 0.1, "note": "renders category pages"},
+  {"name": "api-gateway", "kind": "internal", "direction": "upstream", "status": "healthy", "criticality": "critical", "latency_p95_ms": 40, "error_rate_pct": 0.2, "note": "routing"},
+  {"name": "catalog-api", "kind": "internal", "direction": "self", "status": "degraded", "criticality": "important", "latency_p95_ms": 8900, "error_rate_pct": 4.1, "note": "CPU saturated"},
+  {"name": "postgres-catalog", "kind": "datastore", "direction": "downstream", "status": "degraded", "criticality": "critical", "latency_p95_ms": 940, "error_rate_pct": 0.0, "note": "CPU 96% as a side effect of the query storm, not a database fault"},
+  {"name": "redis-cache", "kind": "datastore", "direction": "downstream", "status": "healthy", "criticality": "important", "latency_p95_ms": 1.3, "error_rate_pct": 0.0, "note": "healthy"},
+  {"name": "inventory-svc", "kind": "internal", "direction": "downstream", "status": "healthy", "criticality": "important", "latency_p95_ms": 88, "error_rate_pct": 0.1, "note": "healthy"}
+]

@@ -1,0 +1,47 @@
+{
+  "root_cause_id": "redis_pool_exhaustion",
+  "root_cause": "Connection leak introduced in v2.17.4 caused Redis pool exhaustion",
+  "root_cause_detail": "v2.17.4 added a billing-meta read to the checkout path and a per-worker connection pool. The new code path acquires a Redis client and never returns it to the pool when the billing-meta lookup fails, so within ~14 minutes every worker held max_connections=100 client connections. Pool acquisition then blocked for up to 1s and the API returned 502/503.",
+  "confirmed_root_cause": "redis_pool_exhaustion",
+  "secondary_cause_id": "connection_leak_regression",
+  "resolution": "Rolled payment-api back to v2.17.3 and raised the per-worker Redis pool to 150 with a 250ms acquisition timeout; the leak in the v2.17.4 checkout path is fixed in v2.17.5.",
+  "resolution_summary": "Rollback v2.17.4 + pool configuration fix",
+  "verification": "redis_connections_active 100/100 -> 63/100, 5xx 31% -> 0.4%, checkout success 68.2% -> 99.3%",
+  "contributing_factors": [
+    "No canary/soak for a cache-pool configuration change on a critical path",
+    "Connection lifecycle is not asserted in tests, so a leak ships silently",
+    "The service-level runbook's first step is 'restart the pods', which masks a leak rather than fixing it",
+    "Pool saturation is only visible in a custom metric, not on the standard dashboard"
+  ],
+  "prevention": [
+    "Add a pool-saturation SLO alert on redis_connections_active / max_connections",
+    "Add a leak detector (open vs returned connections per worker) as a release gate",
+    "Require canary soak of 15 minutes for changes touching cache/connection pools",
+    "Assert connection release in the checkout test suite"
+  ],
+  "runbook_changes": [
+    "Move 'inspect Redis client connections per worker' to the top of the payment-api 5xx runbook",
+    "Mark 'restart the pods' as a temporary mitigation only, never as remediation for pool exhaustion",
+    "Add the deploy-diff step (what changed in the cache/connection path) before restarting anything"
+  ],
+  "lessons": [
+    "Restarting payment-api pods did not resolve Redis connection-pool exhaustion; it only reset the symptom for under two minutes.",
+    "A healthy Redis CPU is expected during pool exhaustion - the client side is the bottleneck, so 'Redis looks fine' is not evidence against it.",
+    "Deploy correlation is a lead, not proof: the leak had to be confirmed by the diagnostic (connections opened but never returned).",
+    "The cheapest high-information check here was the per-worker connection count, not a restart."
+  ],
+  "first_checks": [
+    "redis_connections_active vs max_connections per worker",
+    "connection pool acquisition wait time",
+    "what changed in the last 30 minutes for the cache/connection path",
+    "whether the client connections are returned to the pool"
+  ],
+  "successful_action_ids": ["rollback_recent_deploy", "increase_redis_pool_size", "inspect_redis_connections"],
+  "failed_action_ids": ["restart_api_pool"],
+  "avoid_action_ids": ["restart_api_pool", "scale_out_workers", "failover_database", "flush_cache"],
+  "confirmed_by": "redis_connections_active below 90% of max and 5xx back to the 0.4% baseline after rollback",
+  "resolvable_by": ["rollback_recent_deploy", "increase_redis_pool_size", "fix_connection_leak"],
+  "doomed_actions": ["restart_api_pool"],
+  "memory_episode": "INC-A1 (payment-api, SEV-1): HTTP 503 rose from 0.4% to 31% fourteen minutes after deploying v2.17.4. RedisTimeout plus 'pool active=100 max=100 waiting=37' identified Redis connection-pool exhaustion while Redis CPU stayed normal. Confirmed root cause: a connection leak in the v2.17.4 checkout path drained the per-worker Redis pool. Check first next time: per-worker Redis connection count versus max_connections, and pool acquisition wait time.",
+  "memory_service_pattern": "payment-api uses a per-worker Redis pool of 100 connections and depends on redis-cache for cart session lookups. The recurring payment-api failure is Redis connection-pool exhaustion: it correlates with recent payment-api releases, always presents as RedisTimeout / 502-503 on /v2/checkout, and never shows elevated Redis CPU. Known dangerous response: restarting pods."
+}

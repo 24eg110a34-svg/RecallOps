@@ -1,0 +1,12 @@
+[
+  {"name": "cpu_utilization_pct", "label": "Service CPU", "value": 97.0, "unit": "percent", "baseline": 34, "limit": 85, "stage": "alert"},
+  {"name": "throttled_requests_pct", "label": "Throttled requests", "value": 31.0, "unit": "percent", "baseline": 0.0, "limit": 5.0, "stage": "alert"},
+  {"name": "http_5xx_pct", "label": "HTTP 5xx rate", "value": 4.1, "unit": "percent", "baseline": 0.2, "limit": 5.0, "stage": "alert"},
+  {"name": "latency_p95_ms", "label": "Category page p95", "value": 8900, "unit": "ms", "baseline": 210, "limit": 2000, "stage": "alert"},
+  {"name": "queries_per_request", "label": "Queries per request", "value": 1180, "unit": "count", "baseline": 9, "limit": 400, "stage": "alert"},
+  {"name": "db_queries_per_second", "label": "DB queries/sec", "value": 683, "unit": "qps", "baseline": 15, "limit": 400, "stage": "alert"},
+  {"name": "postgres_cpu_utilization_pct", "label": "Postgres CPU", "value": 96.0, "unit": "percent", "baseline": 28, "limit": 90, "stage": "alert"},
+  {"name": "memory_utilization_pct", "label": "Service memory", "value": 81, "unit": "percent", "baseline": 62, "limit": 90, "stage": "alert"},
+  {"name": "redis_connections_active", "label": "Redis client connections", "value": 77, "unit": "count", "baseline": 74, "limit": 100, "stage": "alert", "note": "healthy, not the constraint"},
+  {"name": "rps", "label": "Request rate", "value": 1240, "unit": "req/s", "baseline": 1190, "limit": 4000, "stage": "alert"}
+]

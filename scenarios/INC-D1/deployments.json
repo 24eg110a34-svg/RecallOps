@@ -1,0 +1,5 @@
+[
+  {"version": "v5.2.0", "deployed_at_offset_s": -660, "author": "@t.nguyen", "change_summary": "Serializer rewrite: removed ProductVariant prefetch, lazy-load variants per item", "status": "current", "risk": "high", "files_changed": 21, "tags": ["catalog", "serializer", "n-plus-one"]},
+  {"version": "v5.1.4", "deployed_at_offset_s": -518400, "author": "@t.nguyen", "change_summary": "Category sort stability fix", "status": "healthy", "risk": "low", "files_changed": 4, "tags": ["catalog"]},
+  {"version": "v5.1.3", "deployed_at_offset_s": -1036800, "author": "@r.dubois", "change_summary": "Image CDN URL builder", "status": "healthy", "risk": "low", "files_changed": 6, "tags": ["cdn"]}
+]

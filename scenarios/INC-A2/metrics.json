@@ -1,0 +1,14 @@
+[
+  {"name": "http_5xx_pct", "label": "HTTP 5xx rate", "value": 14.0, "unit": "percent", "baseline": 0.6, "limit": 5.0, "stage": "alert"},
+  {"name": "http_502_pct", "label": "HTTP 502 rate", "value": 6.2, "unit": "percent", "baseline": 0.2, "limit": 5.0, "stage": "alert"},
+  {"name": "checkout_success_pct", "label": "Checkout success rate", "value": 71.4, "unit": "percent", "baseline": 99.0, "limit": 95.0, "stage": "alert"},
+  {"name": "checkout_latency_p95_ms", "label": "Checkout p95 latency", "value": 3900, "unit": "ms", "baseline": 210, "limit": 2000, "stage": "alert"},
+  {"name": "rps", "label": "Request rate", "value": 1610, "unit": "req/s", "baseline": 1595, "limit": 4000, "stage": "alert"},
+  {"name": "redis_connections_active", "label": "Redis client connections", "value": 150, "unit": "count", "baseline": 58, "limit": 150, "stage": "alert"},
+  {"name": "redis_pool_wait_ms", "label": "Redis pool acquisition wait p95", "value": 690, "unit": "ms", "baseline": 4, "limit": 50, "stage": "alert"},
+  {"name": "redis_cpu_utilization_pct", "label": "Redis CPU", "value": 22, "unit": "percent", "baseline": 19, "limit": 100, "stage": "alert", "note": "misleading: server is fine, the client pool is full"},
+  {"name": "postgres_connections_active", "label": "Postgres connections", "value": 51, "unit": "count", "baseline": 47, "limit": 200, "stage": "alert"},
+  {"name": "cpu_utilization_pct", "label": "Service CPU", "value": 58, "unit": "percent", "baseline": 43, "limit": 85, "stage": "alert"},
+  {"name": "memory_utilization_pct", "label": "Service memory", "value": 74, "unit": "percent", "baseline": 68, "limit": 90, "stage": "alert"},
+  {"name": "psp_latency_p95_ms", "label": "PSP latency p95", "value": 480, "unit": "ms", "baseline": 210, "limit": 600, "stage": "alert", "note": "distractor: real but not causal"}
+]

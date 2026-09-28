@@ -1,0 +1,17 @@
+{"ts_offset_s": 0, "level": "ERROR", "logger": "payment-api.checkout", "message": "checkout request failed: HTTP 503 from cache_gateway (RedisTimeout after 1000ms)", "count": 1841, "stage": "alert"}
+{"ts_offset_s": 4, "level": "ERROR", "logger": "payment-api.cache", "message": "RedisTimeout: cache acquisition timed out after 1000ms key=cart:session:8f21c key=cart:session:44b0", "count": 2310, "stage": "alert"}
+{"ts_offset_s": 9, "level": "WARN", "logger": "payment-api.pool", "message": "redis connection pool active=100 max=100 waiting=37 (configured max_connections=100)", "count": 64, "stage": "alert"}
+{"ts_offset_s": 12, "level": "ERROR", "logger": "payment-api.http", "message": "upstream 502 Bad Gateway from cache_gateway for /v2/checkout/confirm (mixed 502/503)", "count": 512, "stage": "alert"}
+{"ts_offset_s": 15, "level": "WARN", "logger": "payment-api.cache", "message": "redis read timeout on cart:session:8f21c (attempt 2/2)", "count": 741, "stage": "alert"}
+{"ts_offset_s": 18, "level": "INFO", "logger": "deploy.payments", "message": "payment-api v2.17.4 deployed to eu-west-1 by @m.okonkwo (rollout complete, 14 minutes before alert)", "count": 1, "stage": "alert"}
+{"ts_offset_s": 21, "level": "DEBUG", "logger": "payment-api.worker", "message": "leak_canary=checkout_conn_leak open_connections=812 (diagnostic counter, v2.17.4 only)", "count": 1, "stage": "cache_pressure"}
+{"ts_offset_s": 24, "level": "WARN", "logger": "payment-api.pool", "message": "connection not released back to pool (checkout path) leak_canary=checkout_conn_leak", "count": 318, "stage": "cache_pressure"}
+{"ts_offset_s": 30, "level": "INFO", "logger": "redis-cache-3", "message": "redis node healthy: used_memory=412MB, connected_clients=100, ops/sec=18200, cpu=11%", "count": 1, "stage": "cache_pressure"}
+{"ts_offset_s": 33, "level": "INFO", "logger": "payment-api.cache", "message": "RedisTimeout spikes correlate with connection pool saturation, not with redis server load", "count": 1, "stage": "cache_pressure"}
+{"ts_offset_s": 36, "level": "WARN", "logger": "payment-api.http", "message": "checkout success rate 68.2% (baseline 99.1%) - customers see payment failed", "count": 12, "stage": "cache_pressure"}
+{"ts_offset_s": 55, "level": "INFO", "logger": "payment-api.pool", "message": "pool wait time p95=742ms (baseline 3ms) and growing monotonically since 13:58", "count": 4, "stage": "restart_result"}
+{"ts_offset_s": 96, "level": "ERROR", "logger": "payment-api.cache", "message": "RedisTimeout returned after pod restart: 5xx back to 31%, redis pool active=100 max=100", "count": 1876, "stage": "regression"}
+{"ts_offset_s": 99, "level": "WARN", "logger": "payment-api.pool", "message": "restart did not help: same version v2.17.4 still deployed, pool saturated again in 48s", "count": 22, "stage": "regression"}
+{"ts_offset_s": 120, "level": "INFO", "logger": "deploy.payments", "message": "payment-api rolled back to v2.17.3", "count": 1, "stage": "resolved"}
+{"ts_offset_s": 126, "level": "INFO", "logger": "payment-api.pool", "message": "redis pool active=63 max=100, connection leak counter reset to 0", "count": 6, "stage": "resolved"}
+{"ts_offset_s": 132, "level": "INFO", "logger": "payment-api.checkout", "message": "checkout success rate recovered to 99.3%, 5xx at 0.4% (baseline)", "count": 3, "stage": "resolved"}

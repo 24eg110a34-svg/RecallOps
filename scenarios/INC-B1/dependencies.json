@@ -1,0 +1,8 @@
+[
+  {"name": "storefront-web", "kind": "internal", "direction": "upstream", "status": "healthy", "criticality": "important", "latency_p95_ms": 80, "error_rate_pct": 0.1, "note": "checkout + orders UI"},
+  {"name": "api-gateway", "kind": "internal", "direction": "upstream", "status": "healthy", "criticality": "critical", "latency_p95_ms": 52, "error_rate_pct": 0.2, "note": "routes /v2/orders"},
+  {"name": "orders-api", "kind": "internal", "direction": "self", "status": "degraded", "criticality": "critical", "latency_p95_ms": 6400, "error_rate_pct": 18.4, "note": "impacted service"},
+  {"name": "postgres-orders", "kind": "datastore", "direction": "downstream", "status": "unhealthy", "criticality": "critical", "latency_p95_ms": 4210, "error_rate_pct": 2.1, "note": "connection slots exhausted, slow query on order_items"},
+  {"name": "redis-cache", "kind": "datastore", "direction": "downstream", "status": "healthy", "criticality": "important", "latency_p95_ms": 1.1, "error_rate_pct": 0.0, "note": "healthy - the recalled precedent does not apply here"},
+  {"name": "inventory-svc", "kind": "internal", "direction": "downstream", "status": "healthy", "criticality": "important", "latency_p95_ms": 95, "error_rate_pct": 0.2, "note": "healthy"}
+]

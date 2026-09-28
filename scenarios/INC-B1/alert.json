@@ -1,0 +1,11 @@
+{
+  "alert_id": "ALR-5580",
+  "monitor": "orders_api.dependency_timeouts{service=orders-api}",
+  "title": "orders-api: order creation latency 6.4s p95 with 503s",
+  "symptom": "POST /v2/orders is timing out: p95 6.4s (baseline 180ms) with 503 responses and 'too many clients already' errors from Postgres.",
+  "fired_at_offset_s": 0,
+  "threshold": "request_latency p95 > 2s for 5m",
+  "runbook": "https://runbooks.internal/orders/orders-api-latency",
+  "labels": {"env": "prod", "region": "eu-west-1", "team": "orders", "service": "orders-api", "severity_hint": "SEV-2", "dashboard": "https://grafana.internal/d/orders-api"},
+  "notes": "Paged after 5 minutes of sustained latency. Several responders arrive expecting another Redis pool incident - the dependency is a database this time."
+}

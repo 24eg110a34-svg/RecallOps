@@ -1,0 +1,47 @@
+{
+  "root_cause_id": "redis_pool_exhaustion",
+  "root_cause": "Client connection leak on the settlement prefetch path exhausted the per-worker Redis pool",
+  "root_cause_detail": "v2.18.1 prefetches settlement metadata on the checkout path and raises the client pool to 150, but the prefetched client is not returned to the pool on the timeout path. Connections accumulate until acquired=150/150, then cache acquisition blocks and checkout returns a mix of 502 and 503. The Redis server itself is healthy (cpu 22%), so the failure is entirely client-side - the same shape as INC-A1, two weeks later, on a different release.",
+  "confirmed_root_cause": "redis_pool_exhaustion",
+  "secondary_cause_id": "connection_leak_regression",
+  "resolution": "Rolled back to v2.18.0, raised the client pool to 200 with a 250ms acquisition timeout, and shipped v2.18.2 to release the prefetched client on the timeout path.",
+  "resolution_summary": "Rollback v2.18.1 + client pool configuration fix",
+  "verification": "redis_connections_active 150/150 -> 71/200, mixed 502/503 gone, checkout success 71.4% -> 99.1%",
+  "contributing_factors": [
+    "A previous identical incident (INC-A1) was not linked from the runbook or the checkout service page",
+    "Pool size was raised without adding a saturation alert, hiding the ceiling",
+    "PSP latency drift amplified retries and made the incident look dependency-related",
+    "The leak pattern recurred on a different code path, so 'this is a known Redis issue' was not obvious from the alert alone"
+  ],
+  "prevention": [
+    "Alert on client pool utilisation (acquired/max) per service, not only on 5xx",
+    "Link every confirmed incident to its runbook so responders see the precedent before acting",
+    "Assert client release in checkout integration tests (added after INC-A1, still bypassed by the new prefetch path)",
+    "Add leak-canary counters to the release template"
+  ],
+  "runbook_changes": [
+    "Add 'check client pool utilisation first' as step 1 for payment-api checkout timeouts",
+    "Remove 'restart the pods' from the first page: INC-A1 proved it is a temporary mitigation only",
+    "Add a repeat-incident link: 'similar to INC-A1 / INC-A2 (Redis pool exhaustion)'"
+  ],
+  "lessons": [
+    "The second occurrence of a pattern is a process failure, not just a code failure: the first fix did not include the alert that would have caught it.",
+    "A degraded external dependency (PSP latency 480ms) created a plausible but wrong hypothesis; current evidence had to decide, not precedent.",
+    "Recalling the previous incident cut the investigation from a restart-and-wait cycle to a single targeted diagnostic.",
+    "Repeating a known failed action (pod restart) costs about 90 seconds and produces a false sense of recovery."
+  ],
+  "first_checks": [
+    "client pool acquired vs max per worker",
+    "pool acquisition wait time",
+    "which release last touched the client lifecycle on the failing path",
+    "whether the same symptom signature was seen in a previous incident"
+  ],
+  "successful_action_ids": ["rollback_recent_deploy", "increase_redis_pool_size", "inspect_redis_connections"],
+  "failed_action_ids": ["restart_api_pool"],
+  "avoid_action_ids": ["restart_api_pool", "scale_out_workers", "flush_cache", "failover_database"],
+  "confirmed_by": "pool acquired below 50% of max and zero 502/503 for 5 minutes after rollback",
+  "resolvable_by": ["rollback_recent_deploy", "increase_redis_pool_size", "fix_connection_leak"],
+  "doomed_actions": ["restart_api_pool"],
+  "memory_episode": "INC-A2 (payment-api, SEV-2): checkout p95 rose to 3.9s with a mix of 502 and 503 and 'cache acquisition timed out' in the logs, six minutes after deploying v2.18.1 which prefetched settlement metadata on the checkout path and raised the client pool to 150. Cause: prefetched Redis clients were not released on the timeout path, so the per-worker pool hit 150/150. Redis CPU was normal again. Same pattern as INC-A1. Check first next time: client pool acquired vs max per worker.",
+  "memory_service_pattern": "payment-api Redis connection-pool exhaustion is now a recurring pattern (INC-A1, INC-A2). It appears as RedisTimeout, 'cache acquisition timed out' or mixed 502/503 on the checkout path; Redis server CPU stays normal; it always follows a release that touches the checkout/settlement client lifecycle. Restarts are known to be useless."
+}

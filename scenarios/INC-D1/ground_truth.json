@@ -1,0 +1,47 @@
+{
+  "root_cause_id": "n_plus_one_query_cpu",
+  "root_cause": "N+1 query explosion introduced by v5.2.0 serializer rewrite",
+  "root_cause_detail": "v5.2.0 removed the ProductVariant prefetch and lazy-loads variants per item. A 50-item category page became ~1180 database queries, pinning application CPU at 97% (throttling 31% of requests) and driving postgres-catalog CPU to 96%. Nothing is saturated except CPU; the pool waits are a symptom, not the cause.",
+  "confirmed_root_cause": "n_plus_one_query_cpu",
+  "secondary_cause_id": "connection_leak_regression",
+  "resolution": "Rolled catalog-api back to v5.1.4, restoring the prefetch. CPU 31%, DB queries/min 940, category p95 230ms. The serializer rewrite is being re-landed behind a query-count assertion.",
+  "resolution_summary": "Rollback v5.2.0 (restore prefetch)",
+  "verification": "CPU 97% -> 31%, queries_per_request 1180 -> 11, category p95 8900ms -> 230ms",
+  "contributing_factors": [
+    "No query-count assertion in the serializer test suite, so an N+1 shape shipped to production",
+    "Canary was 2% for 90 seconds - not enough time to accumulate per-item queries",
+    "CPU throttling masked the error rate, so the page looked 'only degraded' rather than broken",
+    "Database CPU was blamed before the application's own CPU was checked"
+  ],
+  "prevention": [
+    "Fail CI when queries-per-request for a route grows more than 2x",
+    "Require a 15-minute canary soak for serializer and ORM changes",
+    "Alert on CPU throttling percentage, not only on CPU utilisation",
+    "Add a per-request query budget to the service template"
+  ],
+  "runbook_changes": [
+    "Add step 1: compare queries-per-request against baseline before anything else",
+    "Add 'CPU + query volume together usually means a code-path change, not a dependency' to the runbook",
+    "Remove the generic 'scale out to relieve CPU' advice - it moves the load to the database"
+  ],
+  "lessons": [
+    "Restarts do not fix a CPU problem caused by code: CPU returned to 97% within 30 seconds of the restart.",
+    "Scaling out during a CPU saturation incident pushes the same query storm into the database, which was already at 96% CPU.",
+    "queries-per-request is the single highest-information metric for a CPU saturation incident.",
+    "A low error rate does not mean the service is fine - catalog-api throttled 31% of requests instead of failing them."
+  ],
+  "first_checks": [
+    "queries-per-request vs baseline",
+    "service CPU and throttling percentage",
+    "which release changed the request path and when",
+    "is the database CPU high because of us (query volume) or on its own"
+  ],
+  "successful_action_ids": ["rollback_recent_deploy", "add_index", "inspect_query_stats"],
+  "failed_action_ids": ["restart_api_pool", "scale_out_workers", "kill_long_running_queries"],
+  "avoid_action_ids": ["restart_api_pool", "scale_out_workers", "kill_long_running_queries", "flush_cache"],
+  "confirmed_by": "CPU below 60% and queries-per-request below 50 for 5 minutes",
+  "resolvable_by": ["rollback_recent_deploy", "add_index", "increase_memory_limit"],
+  "doomed_actions": ["restart_api_pool", "scale_out_workers", "kill_long_running_queries"],
+  "memory_episode": "INC-D1 (catalog-api, SEV-2): CPU 97% with 31% throttling, category pages 8.9s, 1180 queries per request eleven minutes after v5.2.0 removed the ProductVariant prefetch (N+1). Postgres CPU 96% was a side effect. Resolved by rolling back to v5.1.4. Check first next time: queries-per-request against baseline, then the deploy diff.",
+  "memory_service_pattern": "catalog-api's characteristic failure is a CPU saturation incident with an N+1 query shape after a serializer/ORM change. Symptoms: high service CPU, throttling instead of errors, database CPU high as a side effect, and healthy caches. Restarting and scaling out are both wrong."
+}

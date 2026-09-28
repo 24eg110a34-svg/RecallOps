@@ -1,0 +1,16 @@
+{
+  "id": "INC-A2",
+  "title": "payment-api checkout timeouts, mixed 502/503",
+  "service": "payment-api",
+  "role": "repeat",
+  "summary": "Same underlying failure as INC-A1 (Redis connection-pool exhaustion) with deliberately different wording, a different release, different timing and a distracting dependency. With Hindsight memory the agent recognises the pattern in one analysis pass, refuses to repeat the failed pod restart and goes straight to the per-worker connection diagnostic.",
+  "severity_hint": "SEV-2",
+  "service_criticality": "critical",
+  "customer_impact": "high",
+  "symptom": "Checkout latency crossed the 4s timeout and responses are a mix of 502 and 503. Cache acquisition timed out is the dominant log signature.",
+  "base_time": "2026-02-25T09:12:00Z",
+  "baseline_error_rate_pct": 0.6,
+  "tags": ["redis", "pool-exhaustion", "repeat", "memory-test"],
+  "memory_expected": true,
+  "demo_notes": "This is the incident that proves Hindsight matters. Nothing here says 'leak' until stage three - the recall of INC-A1 is what moves redis_pool_exhaustion to the top immediately."
+}

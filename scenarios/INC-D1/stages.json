@@ -1,0 +1,64 @@
+[
+  {
+    "id": "alert",
+    "label": "CPU saturation alert",
+    "offset_s": 0,
+    "description": "CPU 97% with throttling; error rate only 4.1% because requests are throttled, not failed.",
+    "evidence": [
+      {"id": "D1-ALERT", "kind": "alert", "source": "datadog-monitor", "title": "catalog-api: CPU saturation 97%, category pages degraded", "detail": "Category and product pages take 4-9s. CPU 97% (baseline 34%), queries-per-request 1180 (baseline 9), error rate 4.1%. Monitor: catalog_api.cpu_saturation{service=catalog-api}.", "ts_offset_s": 0, "raw": {"monitor": "cpu", "cpu_pct": 97.0, "baseline_cpu_pct": 34, "queries_per_request": 1180, "error_rate_pct": 4.1, "team": "catalog"}},
+      {"id": "D1-DEPLOY", "kind": "deployment", "source": "deploy-pipeline", "title": "catalog-api v5.2.0 deployed 11 minutes before the alert", "detail": "Serializer rewrite: removed ProductVariant prefetch, lazy-load variants per item. Deployed by @t.nguyen, 21 files changed, flagged high risk.", "ts_offset_s": -660, "raw": {"service": "catalog-api", "version": "v5.2.0", "minutes_before": 11, "author": "@t.nguyen", "risk": "high", "correlation": 0.88}},
+      {"id": "D1-HEALTH", "kind": "service_health", "source": "service-catalog", "title": "catalog-api degraded; postgres-catalog degraded; redis healthy", "detail": "catalog-api status=degraded (CPU). postgres-catalog status=degraded, CPU 96%, 41k queries/min (baseline 900). redis-cache healthy 1.3ms p95.", "ts_offset_s": 0, "raw": {"service": "catalog-api", "status": "degraded", "degraded_dependencies": ["postgres-catalog"], "healthy_dependencies": ["redis-cache", "inventory-svc"]}}
+    ],
+    "unlocks": ["inspect_error_rate", "inspect_recent_deploy", "inspect_service_health", "inspect_cpu_profile", "inspect_query_stats"],
+    "hint": "CPU plus query volume, not timeouts. Check queries-per-request before restarting anything."
+  },
+  {
+    "id": "query_storm",
+    "label": "N+1 query storm identified",
+    "offset_s": 36,
+    "description": "The serializer executes a query per item; 71% of CPU is row hydration.",
+    "evidence": [
+      {"id": "D1-NPLUSONE", "kind": "simulation", "source": "agent-simulation", "title": "N+1 detected: 1180 queries for one category page (baseline 9)", "detail": "per-item query executed for cart_items_query, lazy load in the serializer. Profile shows 71% of CPU in ORM row hydration for ProductVariant.", "ts_offset_s": 36, "raw": {"diagnostic": true, "queries_per_request": 1180, "baseline_queries": 9, "cpu_hot_method": "orm_row_hydration", "orm_n_plus_one": true, "n_plus_one": true}},
+      {"id": "D1-DBCPU", "kind": "metric", "source": "postgres-catalog", "title": "Postgres CPU 96% with 41k queries/min from catalog-api", "detail": "Database load is a side effect of our own query volume (41k/min vs 900/min baseline); the database is not independently failing.", "ts_offset_s": 18, "raw": {"name": "postgres_cpu_utilization_pct", "value": 96, "limit": 90, "db_queries_per_second": 683, "baseline": 15, "caused_by": "catalog-api query storm"}}
+    ],
+    "metrics": [
+      {"name": "queries_per_request", "label": "Queries per request", "value": 1180, "unit": "count", "baseline": 9, "limit": 400, "ts_offset_s": 36},
+      {"name": "db_queries_per_second", "label": "DB queries/sec", "value": 683, "unit": "qps", "baseline": 15, "limit": 400, "ts_offset_s": 36}
+    ],
+    "unlocks": ["inspect_query_stats", "inspect_cpu_profile", "rollback_recent_deploy", "restart_api_pool", "scale_out_workers", "add_index", "kill_long_running_queries", "flush_cache"],
+    "hint": "The database is a symptom here. Rolling back the serializer change is the structural fix."
+  },
+  {
+    "id": "restart_result",
+    "label": "Restart mitigation applied",
+    "offset_s": 70,
+    "description": "Reachable only by executing the restart action. 25 second CPU dip.",
+    "evidence": [
+      {"id": "D1-RESTART-EFFECT", "kind": "simulation", "source": "agent-simulation", "title": "After rolling restart: CPU 41% for 25s, then 97% again", "detail": "Workers restarted onto the same v5.2.0 build. CPU dipped to 41% and returned to 97% within 30 seconds; queries-per-request unchanged at 1180.", "ts_offset_s": 70, "raw": {"diagnostic": true, "follows_action": "restart_api_pool", "reachable_by_waiting": true, "cpu_utilization_pct": 41, "queries_per_request": 1180, "durable": false}}
+    ],
+    "metrics": [
+      {"name": "cpu_utilization_pct", "label": "Service CPU", "value": 41.0, "unit": "percent", "baseline": 34, "limit": 85, "ts_offset_s": 70},
+      {"name": "queries_per_request", "label": "Queries per request", "value": 1180, "unit": "count", "baseline": 9, "limit": 400, "ts_offset_s": 70}
+    ],
+    "unlocks": ["rollback_recent_deploy", "inspect_query_stats", "add_index", "restart_api_pool"],
+    "hint": "The restart did not change the query shape. That is the definition of a symptom-only mitigation."
+  },
+  {
+    "id": "resolved",
+    "label": "Service recovered",
+    "offset_s": 162,
+    "description": "Rollback restored the prefetch; CPU and query volume back to baseline.",
+    "evidence": [
+      {"id": "D1-RESOLVED", "kind": "outcome", "source": "agent-simulation", "title": "Resolved: CPU 31%, 11 queries/request, page p95 230ms", "detail": "catalog-api rolled back to v5.1.4 with the ProductVariant prefetch restored. DB queries/min back to 940, postgres CPU 24%.", "ts_offset_s": 162, "raw": {"diagnostic": true, "resolved": true, "cpu_utilization_pct": 31, "queries_per_request": 11, "version": "v5.1.4"}}
+    ],
+    "metrics": [
+      {"name": "cpu_utilization_pct", "label": "Service CPU", "value": 31.0, "unit": "percent", "baseline": 34, "limit": 85, "ts_offset_s": 162},
+      {"name": "queries_per_request", "label": "Queries per request", "value": 11, "unit": "count", "baseline": 9, "limit": 400, "ts_offset_s": 162},
+      {"name": "db_queries_per_second", "label": "DB queries/sec", "value": 16, "unit": "qps", "baseline": 15, "limit": 400, "ts_offset_s": 162},
+      {"name": "latency_p95_ms", "label": "Category page p95", "value": 230, "unit": "ms", "baseline": 210, "limit": 2000, "ts_offset_s": 162},
+      {"name": "http_5xx_pct", "label": "HTTP 5xx rate", "value": 0.2, "unit": "percent", "baseline": 0.2, "limit": 5.0, "ts_offset_s": 162}
+    ],
+    "unlocks": [],
+    "hint": "Stable. Retain the lesson: query volume is the first thing to check on a CPU incident, and scaling out is the wrong reflex."
+  }
+]

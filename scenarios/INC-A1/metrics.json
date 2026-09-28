@@ -1,0 +1,13 @@
+[
+  {"name": "http_5xx_pct", "label": "HTTP 5xx rate", "value": 31.0, "unit": "percent", "baseline": 0.4, "limit": 5.0, "stage": "alert"},
+  {"name": "checkout_success_pct", "label": "Checkout success rate", "value": 68.2, "unit": "percent", "baseline": 99.1, "limit": 95.0, "stage": "alert"},
+  {"name": "latency_p95_ms", "label": "P95 latency", "value": 840, "unit": "ms", "baseline": 120, "limit": 400, "stage": "alert"},
+  {"name": "rps", "label": "Request rate", "value": 1850, "unit": "req/s", "baseline": 1820, "limit": 4000, "stage": "alert"},
+  {"name": "redis_connections_active", "label": "Redis client connections", "value": 100, "unit": "count", "baseline": 61, "limit": 100, "stage": "alert"},
+  {"name": "redis_cpu_utilization_pct", "label": "Redis CPU", "value": 11, "unit": "percent", "baseline": 18, "limit": 100, "stage": "alert", "note": "misleading: Redis itself is not busy"},
+  {"name": "redis_pool_wait_ms", "label": "Redis pool acquisition wait p95", "value": 742, "unit": "ms", "baseline": 3, "limit": 50, "stage": "alert"},
+  {"name": "postgres_connections_active", "label": "Postgres connections", "value": 42, "unit": "count", "baseline": 45, "limit": 200, "stage": "alert"},
+  {"name": "cpu_utilization_pct", "label": "Service CPU", "value": 63, "unit": "percent", "baseline": 41, "limit": 85, "stage": "alert"},
+  {"name": "memory_utilization_pct", "label": "Service memory", "value": 71, "unit": "percent", "baseline": 66, "limit": 90, "stage": "alert"},
+  {"name": "queue_depth", "label": "Async queue depth", "value": 84, "unit": "messages", "baseline": 60, "limit": 5000, "stage": "alert"}
+]

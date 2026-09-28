@@ -1,0 +1,8 @@
+[
+  {"name": "web-frontend", "kind": "internal", "direction": "upstream", "status": "healthy", "criticality": "important", "latency_p95_ms": 90, "error_rate_pct": 0.1, "note": "renders checkout page"},
+  {"name": "api-gateway", "kind": "internal", "direction": "upstream", "status": "healthy", "criticality": "critical", "latency_p95_ms": 45, "error_rate_pct": 0.2, "note": "routes /v2/* to payment-api"},
+  {"name": "payment-api", "kind": "internal", "direction": "self", "status": "degraded", "criticality": "critical", "latency_p95_ms": 840, "error_rate_pct": 31.0, "note": "the impacted service"},
+  {"name": "redis-cache", "kind": "datastore", "direction": "downstream", "status": "healthy", "criticality": "critical", "latency_p95_ms": 1.2, "error_rate_pct": 0.0, "note": "server healthy, client pool saturated - key distractor"},
+  {"name": "postgres-orders", "kind": "datastore", "direction": "downstream", "status": "healthy", "criticality": "critical", "latency_p95_ms": 8.4, "error_rate_pct": 0.0, "note": "orders + ledger database"},
+  {"name": "psp-acquirer-eu", "kind": "external", "direction": "downstream", "status": "healthy", "criticality": "critical", "latency_p95_ms": 210, "error_rate_pct": 0.1, "note": "card acquiring PSP, healthy throughout"}
+]

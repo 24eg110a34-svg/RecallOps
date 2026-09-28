@@ -1,0 +1,151 @@
+[
+  {
+    "id": "alert",
+    "label": "Checkout timeout alert",
+    "offset_s": 0,
+    "description": "Latency budget breach on the checkout path, mixed 502/503 responses.",
+    "evidence": [
+      {
+        "id": "A2-ALERT",
+        "kind": "alert",
+        "source": "datadog-monitor",
+        "title": "payment-api: checkout timeout budget breached, mixed 502/503",
+        "detail": "Checkout p95 rose from 210ms to 3.9s. Responses are a mix of 502 and 503; 'cache acquisition timed out' dominates the log stream. Monitor: checkout.latency_budget_breach{service=payment-api}.",
+        "ts_offset_s": 0,
+        "raw": {"monitor": "checkout_latency", "error_rate_pct": 14.0, "baseline_pct": 0.6, "p95_ms": 3900, "mixed_502_503": true, "team": "payments"}
+      },
+      {
+        "id": "A2-DEPLOY-RECENT",
+        "kind": "deployment",
+        "source": "deploy-pipeline",
+        "title": "payment-api v2.18.1 deployed 6 minutes before the alert",
+        "detail": "Settlement metadata prefetch on the checkout path, client pool raised to 150. Deployed by @s.almeida, 14 files changed, flagged medium risk.",
+        "ts_offset_s": -360,
+        "raw": {"service": "payment-api", "version": "v2.18.1", "minutes_before": 6, "author": "@s.almeida", "risk": "medium", "correlation": 0.77, "files_changed": 14}
+      },
+      {
+        "id": "A2-HEALTH",
+        "kind": "service_health",
+        "source": "service-catalog",
+        "title": "payment-api degraded; redis-cache healthy; psp-acquirer-eu degraded",
+        "detail": "payment-api status=degraded. redis-cache healthy (1.4ms p95, 150 connected clients). psp-acquirer-eu status=degraded, 480ms p95, error rate 0.4% - inside its SLO.",
+        "ts_offset_s": 0,
+        "raw": {"service": "payment-api", "status": "degraded", "degraded_dependencies": ["psp-acquirer-eu"], "healthy_dependencies": ["redis-cache", "postgres-orders"]}
+      }
+    ],
+    "unlocks": ["inspect_error_rate", "inspect_recent_deploy", "inspect_service_health", "inspect_dependency_health", "inspect_retry_config"],
+    "hint": "Latency first, error rate second. The PSP is degraded - check whether that explains anything before assuming it does."
+  },
+  {
+    "id": "pool_saturation",
+    "label": "Client pool saturation",
+    "offset_s": 30,
+    "description": "Client pool is full (acquired=150/150) and connections are not being released on the settlement path.",
+    "evidence": [
+      {
+        "id": "A2-POOL",
+        "kind": "simulation",
+        "source": "agent-simulation",
+        "title": "Client pool saturated: acquired 150/150, queued 58, wait p95 690ms",
+        "detail": "payment-api client pool is fully acquired with 58 waiters. Wait time is rising monotonically for four minutes with no sign of self-recovery.",
+        "ts_offset_s": 30,
+        "raw": {"diagnostic": true, "name": "redis_connections_active", "value": 150, "limit": 150, "queued": 58, "pool_wait_ms": 690}
+      },
+      {
+        "id": "A2-LEAK",
+        "kind": "log",
+        "source": "payment-api.worker",
+        "title": "Connection not released back to pool (settlement path), open_connections=1402",
+        "detail": "connection not released back to pool (settlement path) open_connections=1402, prefetch path leak signature present",
+        "ts_offset_s": 26,
+        "raw": {"level": "WARN", "logger": "payment-api.worker", "path": "settlement", "open_connections": 1402, "diagnostic": true}
+      },
+      {
+        "id": "A2-REDIS-HEALTHY",
+        "kind": "service_health",
+        "source": "redis-exporter",
+        "title": "Redis healthy: cpu 22%, connected_clients 150, used_memory 508MB",
+        "detail": "redis-cache-1 reports healthy: cpu 22%, used_memory 508MB, connected_clients 150. Server-side headroom exists; the client's pool budget is fully consumed.",
+        "ts_offset_s": 18,
+        "raw": {"service": "redis-cache", "status": "healthy", "redis_cpu_utilization_pct": 22, "connected_clients": 150, "misleading": true}
+      }
+    ],
+    "metrics": [
+      {"name": "redis_connections_active", "label": "Redis client connections", "value": 150, "unit": "count", "baseline": 58, "limit": 150, "ts_offset_s": 30},
+      {"name": "redis_pool_wait_ms", "label": "Redis pool acquisition wait p95", "value": 690, "unit": "ms", "baseline": 4, "limit": 50, "ts_offset_s": 30}
+    ],
+    "unlocks": ["inspect_redis_connections", "inspect_connection_growth", "inspect_query_stats", "restart_api_pool", "rollback_recent_deploy", "increase_redis_pool_size", "scale_out_workers", "isolate_dependency", "flush_cache"],
+    "hint": "The client's budget is the constraint. A degraded PSP is a real but separate signal."
+  },
+  {
+    "id": "restart_result",
+    "label": "Restart mitigation applied",
+    "offset_s": 60,
+    "description": "Reachable only by executing the restart action. Familiar 40 second dip.",
+    "evidence": [
+      {
+        "id": "A2-RESTART-EFFECT",
+        "kind": "simulation",
+        "source": "agent-simulation",
+        "title": "After rolling restart: failures 5% for 40s, then pool saturated again",
+        "detail": "Workers restarted onto the same v2.18.1 build. Pool recovered to 74/150 for about 40 seconds, then refilled as prefetched clients leaked again.",
+        "ts_offset_s": 60,
+        "raw": {"diagnostic": true, "after_action": "restart_api_pool", "http_5xx_pct": 5.0, "redis_connections_active": 74, "durable": false}
+      }
+    ],
+    "metrics": [
+      {"name": "http_5xx_pct", "label": "HTTP 5xx rate", "value": 5.0, "unit": "percent", "baseline": 0.6, "limit": 5.0, "ts_offset_s": 60},
+      {"name": "redis_connections_active", "label": "Redis client connections", "value": 74, "unit": "count", "baseline": 58, "limit": 150, "ts_offset_s": 60}
+    ],
+    "unlocks": ["inspect_redis_connections", "inspect_recent_deploy", "rollback_recent_deploy", "increase_redis_pool_size", "restart_api_pool"],
+    "hint": "Same script as before. Compare the elapsed time to the previous incident."
+  },
+  {
+    "id": "regression",
+    "label": "Regression after mitigation",
+    "offset_s": 92,
+    "description": "Failure rate back to 24% with the pool saturated on the same build.",
+    "evidence": [
+      {
+        "id": "A2-REGRESSION",
+        "kind": "outcome",
+        "source": "agent-simulation",
+        "title": "Incident returned to 24% failures 32s after the restart",
+        "detail": "cache acquisition timed out again, pool acquired 150/150, v2.18.1 still deployed. The mitigation is confirmed temporary.",
+        "ts_offset_s": 92,
+        "raw": {"diagnostic": true, "follows_action": "restart_api_pool", "reachable_by_waiting": true, "http_5xx_pct": 24.0, "redis_connections_active": 150, "regressed": true}
+      }
+    ],
+    "metrics": [
+      {"name": "http_5xx_pct", "label": "HTTP 5xx rate", "value": 24.0, "unit": "percent", "baseline": 0.6, "limit": 5.0, "ts_offset_s": 92},
+      {"name": "redis_connections_active", "label": "Redis client connections", "value": 150, "unit": "count", "baseline": 58, "limit": 150, "ts_offset_s": 92}
+    ],
+    "unlocks": ["inspect_redis_connections", "inspect_recent_deploy", "rollback_recent_deploy", "increase_redis_pool_size", "kill_long_running_queries"],
+    "hint": "A second mitigation will behave identically. Change something structural: rollback or pool configuration."
+  },
+  {
+    "id": "resolved",
+    "label": "Service recovered",
+    "offset_s": 158,
+    "description": "Rollback plus pool configuration, stable at baseline.",
+    "evidence": [
+      {
+        "id": "A2-RESOLVED",
+        "kind": "outcome",
+        "source": "agent-simulation",
+        "title": "Resolved: pool 71/200, no 502/503, checkout 99.1%",
+        "detail": "payment-api rolled back to v2.18.0 with client pool 200. Failures cleared, pool wait 2ms, checkout success 99.1%.",
+        "ts_offset_s": 158,
+        "raw": {"diagnostic": true, "resolved": true, "http_5xx_pct": 0.6, "redis_connections_active": 71, "version": "v2.18.0"}
+      }
+    ],
+    "metrics": [
+      {"name": "http_5xx_pct", "label": "HTTP 5xx rate", "value": 0.6, "unit": "percent", "baseline": 0.6, "limit": 5.0, "ts_offset_s": 158},
+      {"name": "checkout_success_pct", "label": "Checkout success rate", "value": 99.1, "unit": "percent", "baseline": 99.0, "limit": 95.0, "ts_offset_s": 158},
+      {"name": "redis_connections_active", "label": "Redis client connections", "value": 71, "unit": "count", "baseline": 58, "limit": 200, "ts_offset_s": 158},
+      {"name": "checkout_latency_p95_ms", "label": "Checkout p95 latency", "value": 214, "unit": "ms", "baseline": 210, "limit": 2000, "ts_offset_s": 158}
+    ],
+    "unlocks": [],
+    "hint": "Second resolution of the same pattern. Generate the postmortem and promote the pattern to a service-level memory."
+  }
+]

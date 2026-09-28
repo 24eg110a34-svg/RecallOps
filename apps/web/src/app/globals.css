@@ -1,0 +1,57 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-ink-950 text-slate-200 antialiased;
+  background-image:
+    radial-gradient(900px 500px at 12% -8%, rgba(56, 189, 248, 0.10), transparent 60%),
+    radial-gradient(800px 500px at 90% 0%, rgba(167, 139, 250, 0.10), transparent 55%);
+  background-attachment: fixed;
+}
+
+@layer components {
+  .panel {
+    @apply rounded-xl border border-ink-700/70 bg-ink-900/70 backdrop-blur-sm;
+  }
+  .panel-title {
+    @apply flex items-center justify-between border-b border-ink-700/60 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-medium;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-3 py-1.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-40;
+  }
+  .btn-primary {
+    @apply btn bg-signal-cyan/15 text-signal-cyan hover:bg-signal-cyan/25 ring-1 ring-inset ring-signal-cyan/40;
+  }
+  .btn-green {
+    @apply btn bg-signal-green/15 text-signal-green hover:bg-signal-green/25 ring-1 ring-inset ring-signal-green/40;
+  }
+  .btn-red {
+    @apply btn bg-signal-red/15 text-signal-red hover:bg-signal-red/25 ring-1 ring-inset ring-signal-red/40;
+  }
+  .btn-ghost {
+    @apply btn bg-ink-800 text-slate-300 hover:bg-ink-700;
+  }
+  .kv {
+    @apply grid grid-cols-[minmax(7rem,auto)_1fr] gap-x-3 gap-y-1 text-[13px];
+  }
+  .kv dt {
+    @apply text-slate-500;
+  }
+  .kv dd {
+    @apply text-slate-200;
+  }
+  .bar {
+    @apply h-1.5 w-full overflow-hidden rounded-full bg-ink-700;
+  }
+  .bar > span {
+    @apply block h-full rounded-full;
+  }
+}
