@@ -116,6 +116,16 @@ def main() -> int:
         print(json.dumps(totals, indent=2))
 
     # ----------------------------------------------------------- learning loop
+    if not check("demo data is populated (an empty app will show zero-everywhere)", (totals.get("memories") or 0) > 0,
+                 "database is empty - fix with: python scripts/reset_demo.py, or press 'Run full demo' in the UI"):
+        print("\n  The site is running but has no history yet. Populate it and re-run:")
+        print("      .\\.venv\\Scripts\\python scripts\\reset_demo.py")
+        print("  (or press 'Run full demo (A1 -> A2 -> comparison)' on the dashboard)")
+        section("3. The learning loop (skipped - nothing to check yet)")
+        passed = sum(1 for ok, _, _ in results if ok)
+        print(f"\n{passed}/{len(results)} checks passed (site is up, demo data is empty)")
+        return 1
+
     section("3. The learning loop")
     detail = get_json(f"{API}/api/incidents/INC-A1") or {}
     check("INC-A1 has a confirmed root cause", bool(detail.get("root_cause")), str(detail.get("state")))

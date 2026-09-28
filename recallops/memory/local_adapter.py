@@ -216,7 +216,8 @@ class LocalMemoryAdapter(MemoryPort):
             # recorded failure on a matching symptom is the most actionable
             # precedent we have, so give it precedence over plain background.
             if item.kind is MemoryKind.ACTION_OUTCOME:
-                score += -0.18 if item.helped is False else 0.10
+                failed = item.helped is False or item.outcome in {"temporary_improvement", "hurt", "no_effect"}
+                score += 0.28 if failed else 0.10
             elif item.kind is MemoryKind.SERVICE_PATTERN:
                 score += 0.05
 

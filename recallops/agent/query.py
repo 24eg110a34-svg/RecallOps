@@ -29,7 +29,7 @@ _MEMORY_KIND_HINTS = {
 def build_memory_query(
     bundle: EvidenceBundle,
     *,
-    limit: int = 12,
+    limit: int = 24,
     exclude_incident_id: str | None = None,
     budget: str = "mid",
 ) -> MemoryQuery:

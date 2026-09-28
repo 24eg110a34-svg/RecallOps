@@ -75,6 +75,23 @@ async def lifespan(app: FastAPI):  # noqa: ANN201
     logger.info("RecallOps shutting down")
 
 
+def build_origin_regex(settings) -> str | None:
+    """Origins accepted in addition to the explicitly configured list.
+
+    A local demo is opened in many ways - ``localhost``, ``127.0.0.1``, the
+    machine's LAN address, sometimes on a different dev port. Rejecting those
+    with a bare CORS 400 makes the site look broken when nothing is wrong, so
+    loopback (and, optionally, private-LAN) origins are always accepted.
+    """
+    patterns: list[str] = []
+    if settings.cors_allow_localhost:
+        patterns.append(r"^https?://(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$")
+    if settings.cors_allow_lan:
+        # RFC1918 ranges only - never a public host.
+        patterns.append(r"^https?://(10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})(:\d+)?$")
+    return "|".join(patterns) if patterns else None
+
+
 def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(
@@ -85,7 +102,8 @@ def create_app() -> FastAPI:
     )
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.cors_origin_list or ["*"],
+        allow_origins=settings.cors_origin_list or [],
+        allow_origin_regex=build_origin_regex(settings),
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

@@ -34,6 +34,11 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./recallops.db"
     scenarios_dir: str = "./scenarios"
     cors_origins: str = "http://localhost:4321,http://127.0.0.1:4321"
+    # Accept any loopback port (localhost/127.0.0.1/[::1]) so a different dev port
+    # never breaks the demo with a CORS 400.
+    cors_allow_localhost: bool = True
+    # Also accept private-LAN origins so the demo can be opened from another device.
+    cors_allow_lan: bool = True
     log_level: str = "info"
     api_host: str = "127.0.0.1"
     api_port: int = 8765
