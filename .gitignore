@@ -14,3 +14,16 @@ coverage/
 *.tsbuildinfo
 .DS_Store
 TestResults/
+
+# --- added before publishing ---
+*.db-shm
+*.db-wal
+*.sqlite3
+*.log
+.env.*
+!.env.example
+.idea/
+.vscode/
+.ruff_cache/
+.mypy_cache/
+apps/web/.env*.local

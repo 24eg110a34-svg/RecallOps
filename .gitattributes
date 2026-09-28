@@ -1,0 +1,27 @@
+# Normalise line endings so the same files work on Windows, macOS and Linux.
+# Without this, Windows' autocrlf rewrites every file on checkout and the repo
+# shows phantom diffs everywhere.
+* text=auto eol=lf
+
+# Keep these as-is (generated / binary)
+*.png binary
+*.jpg binary
+*.ico binary
+*.pdf binary
+*.db binary
+*.sqlite3 binary
+*.ndjson text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.py text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.js text eol=lf
+*.mjs text eol=lf
+*.css text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.sh text eol=lf
+
+# Lockfiles: resolved by npm, not linted - pin them exactly.
+package-lock.json -diff linguist-generated=true
