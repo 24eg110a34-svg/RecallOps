@@ -292,12 +292,60 @@ python scripts/run_eval.py          # memory OFF vs ON table, saved with --json
 
 ```bash
 docker compose up -d hindsight      # real Hindsight on :8888
-docker compose up -d                # Hindsight + API on :8765
+docker compose up -d                # Hindsight + API on :8765 + frontend on :4321
 ```
+
+Both the API and frontend containers use `restart: unless-stopped` and have
+healthchecks configured. The API healthcheck hits `/health/live` (liveness only,
+so a Hindsight outage does not trigger a restart loop).
 
 ---
 
-## 13. Configuration
+## 13. Running 24/7 on Windows
+
+RecallOps is designed to run continuously. Two practical methods:
+
+### Option A: Windows Task Scheduler (recommended)
+
+```powershell
+# 1. Install the auto-start task (run as Administrator)
+powershell -ExecutionPolicy Bypass -File scripts\install-task.ps1
+
+# 2. Start immediately
+schtasks /run /tn "RecallOps-24x7"
+
+# 3. Check health
+powershell -ExecutionPolicy Bypass -File scripts\health-check.ps1
+```
+
+The task starts at system boot, runs as SYSTEM, and restarts up to 3 times on
+failure (1-minute interval). Logs are written to `.runtime\api.log` and
+`.runtime\web.log`.
+
+### Option B: Manual start/stop
+
+```powershell
+# Start (background, survives the current session)
+powershell -ExecutionPolicy Bypass -File scripts\start-24x7.ps1
+
+# Stop
+powershell -ExecutionPolicy Bypass -File scripts\stop-24x7.ps1
+```
+
+### Health endpoints
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /health/live` | Liveness: is the process up? Never touches the database. |
+| `GET /health/ready` | Readiness: can it serve traffic? Checks DB read + write + schema. Returns 503 if not. |
+| `GET /health` | Full component report with runtime identity (instance ID, uptime, PID). |
+
+The `instance_id` in every health response and SSE `ready` frame lets you
+detect a backend restart. The frontend uses it to resync automatically.
+
+---
+
+## 14. Configuration
 
 All variables live in `.env.example`. The ones that matter:
 
@@ -316,7 +364,7 @@ All variables live in `.env.example`. The ones that matter:
 
 ---
 
-## 14. Honest limitations
+## 15. Honest limitations
 
 * The RCA engine is a curated knowledge base of failure families plus an LLM
   narrative. It is explainable and reproducible by design — it is not a trained

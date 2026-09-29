@@ -48,6 +48,7 @@ from recallops.domain.enums import (
     IncidentState,
     MemoryKind,
     Outcome,
+    RiskLevel,
     TimelinePhase,
     assert_transition,
     can_transition,
@@ -300,6 +301,9 @@ class IncidentOrchestrator:
                 )
                 for f in incident.feedback
             ]
+            # Capture the pre-analysis stack so the UI can show what actually changed.
+            previous_ranking = [f"{h.cause}::{(h.confidence or 0.0):.3f}" for h in sorted(incident.hypotheses, key=lambda h: h.rank or 99)]
+            previous_confidence = (min(incident.hypotheses, key=lambda h: h.rank or 99).confidence or 0.0) if incident.hypotheses else 0.0
             outcome = await self.engine.run(bundle, memory_result, feedback=feedback)
 
             self._persist_hypotheses(session, incident, outcome.hypotheses, outcome.conflicts)
@@ -314,18 +318,8 @@ class IncidentOrchestrator:
             if memory_result.degraded:
                 incident.meta = {**(incident.meta or {}), "memory_degraded_reason": memory_result.degraded_reason}
 
-            plan = self.planner.plan(
-                incident_id=incident.id,
-                hypotheses=outcome.hypotheses,
-                memories=memory_result.items,
-                available_action_ids=sim.available_actions(),
-                executed_action_ids=[definition_id_from_spec(a.id) for a in incident.actions if a.result is not None],
-                state=IncidentState(incident.state),
-                step_index=self._next_step_index(incident),
-            )
-            self._persist_plan(session, incident, plan)
-            incident.blocked_action_count = len(plan.blocked)
-
+            # Declared here so every lifecycle event below can be batched and
+            # published after the transaction commits.
             events: list[Any] = []
             events.append(
                 record_event(
@@ -355,6 +349,50 @@ class IncidentOrchestrator:
                     ts=sim.timestamp(),
                 )
             )
+            # Re-analysis is a distinct lifecycle stage: the hypothesis stack moved,
+            # and the UI shows *what changed* rather than re-listing every candidate.
+            if outcome.hypotheses and previous_ranking:
+                previous_top = previous_ranking[0]
+                previous_map = {c: c for c in previous_ranking}
+                reordered = [h.cause for h in outcome.hypotheses] != previous_ranking
+                top_changed = (top.cause_id if top else "") != previous_top.split("::", 1)[-1]
+                confidence_delta = (
+                    round(top.confidence - previous_confidence, 3) if top and previous_confidence else 0.0
+                )
+                if reordered or top_changed or abs(confidence_delta) >= 0.01:
+                    added = [h.cause for h in outcome.hypotheses if h.cause not in previous_map]
+                    events.append(
+                        record_event(
+                            session,
+                            incident_id=incident.id,
+                            phase=TimelinePhase.INVESTIGATION,
+                            title=(
+                                f"Investigation updated: {len(outcome.hypotheses)} candidate root cause(s)"
+                                + (f", top is now {top.cause}" if top_changed and top else "")
+                            ),
+                            detail=(
+                                f"Confidence moved {confidence_delta:+.0%}. "
+                                + (f"Newly considered: {', '.join(added[:3])}." if added else "No new candidates.")
+                                + f" Evidence now: {len(record.evidence)} item(s), stage '{sim.stage_id}'."
+                            ),
+                            actor="rca-engine",
+                            meta={
+                                "previous_leading": previous_top,
+                                "leading": top.cause if top else None,
+                                "leading_cause_id": top.cause_id if top else None,
+                                "confidence_delta": confidence_delta,
+                                "reordered": reordered,
+                                "added": added,
+                                "evidence_count": len(record.evidence),
+                                "stage": sim.stage_id,
+                                "ranking": [
+                                    {"cause_id": h.cause_id, "cause": h.cause, "confidence": h.confidence}
+                                    for h in outcome.hypotheses
+                                ],
+                            },
+                            ts=sim.timestamp(),
+                        )
+                    )
             if top is not None:
                 events.append(
                     record_event(
@@ -417,6 +455,52 @@ class IncidentOrchestrator:
                         ts=sim.timestamp(),
                     )
                 )
+
+            plan = self.planner.plan(
+                incident_id=incident.id,
+                hypotheses=outcome.hypotheses,
+                memories=memory_result.items,
+                available_action_ids=sim.available_actions(),
+                executed_action_ids=[definition_id_from_spec(a.id) for a in incident.actions if a.result is not None],
+                state=IncidentState(incident.state),
+                step_index=self._next_step_index(incident),
+            )
+            self._persist_plan(session, incident, plan)
+            incident.blocked_action_count = len(plan.blocked)
+
+            # The safety gate's verdict on the recommended action belongs in the
+            # audit trail, not only on a card in the UI: an SRE reading the
+            # timeline later must see *why* execution was or was not permitted.
+            if plan.recommendation is not None:
+                rec = plan.recommendation
+                if rec.risk is RiskLevel.READ_ONLY:
+                    gate_verdict = "read-only diagnostic - executable without approval"
+                elif rec.risk is RiskLevel.REVERSIBLE:
+                    gate_verdict = "state-changing but reversible - human approval required"
+                else:
+                    gate_verdict = "high risk - advisory only, never auto-executed"
+                events.append(
+                    record_event(
+                        session,
+                        incident_id=incident.id,
+                        phase=TimelinePhase.SAFETY_GATE,
+                        title=f"Safety gate assessed {rec.action.description} [{rec.risk.value}]",
+                        detail=f"{gate_verdict}. {rec.action.reason}",
+                        actor="safety-gate",
+                        meta={
+                            "action_id": rec.action.id,
+                            "risk": rec.risk.value,
+                            "requires_approval": rec.requires_approval,
+                            "reversible": rec.action.reversible,
+                            "production_impact": rec.action.production_impact,
+                            "data_loss_risk": rec.action.data_loss_risk,
+                            "safety_notes": rec.action.safety_notes,
+                            "verdict": gate_verdict,
+                        },
+                        ts=sim.timestamp(),
+                    )
+                )
+
             if plan.recommendation is not None:
                 rec = plan.recommendation
                 events.append(
@@ -840,6 +924,25 @@ class IncidentOrchestrator:
                 approved=approved,
                 approved_by=approved_by or row.decided_by or "",
             )
+            safety_event = record_event(
+                session,
+                incident_id=incident_id,
+                phase=TimelinePhase.SAFETY_GATE,
+                title=(
+                    f"Safety gate {verdict.decision.value}: {row.description}"
+                    + (f" (authorised by {approved_by or row.decided_by})" if verdict.authorized else "")
+                ),
+                detail="; ".join([*verdict.notes, *verdict.warnings, *verdict.blockers]) or verdict.risk.value,
+                actor="safety-gate",
+                meta={
+                    "action_id": action_id,
+                    "decision": verdict.decision.value,
+                    "authorized": verdict.authorized,
+                    "risk": verdict.risk.value,
+                    "blockers": verdict.blockers,
+                },
+                ts=sim.timestamp(),
+            )
             if verdict.decision.value == "refuse":
                 row.status = (ActionStatus.BLOCKED_BY_MEMORY.value if row.blocked_reason else row.status) if verdict.blockers and "high_risk_action_is_advisory_only" in verdict.blockers else row.status
                 event = record_event(
@@ -854,6 +957,7 @@ class IncidentOrchestrator:
                 )
                 session.commit()
                 publish_event(incident_id, event)
+                publish_event(incident_id, safety_event)
                 return {
                     "action_id": action_id,
                     "executed": False,
@@ -874,6 +978,7 @@ class IncidentOrchestrator:
                 )
                 session.commit()
                 publish_event(incident_id, event)
+                publish_event(incident_id, safety_event)
                 return {
                     "action_id": action_id,
                     "executed": False,
@@ -882,7 +987,7 @@ class IncidentOrchestrator:
                     "message": "This action changes state and needs explicit human approval.",
                 }
 
-            events: list[Any] = []
+            events: list[Any] = [safety_event]
             events.append(
                 record_event(
                     session,

@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { ErrorNote, Panel } from "@/components/ui";
+import { useCallback, useEffect, useState } from "react";
+import { ErrorNote, Panel, StreamStatus } from "@/components/ui";
+import { TimelinePanel } from "@/components/timeline";
 import { api } from "@/lib/api";
+import { useIncidentStream } from "@/lib/use-incident-stream";
 
 /** Live incident view: header, evidence, memory, hypotheses, recommendation, timeline. */
 export function CommandView({ incidentId }: { incidentId: string }) {
@@ -11,28 +13,39 @@ export function CommandView({ incidentId }: { incidentId: string }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [live, setLive] = useState(true);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       setIncident(await api.incident(incidentId));
     } catch (e) {
       setError((e as Error).message);
     }
-  };
-
-  useEffect(() => {
-    load();
   }, [incidentId]);
 
   useEffect(() => {
-    if (!live || !incidentId) return;
-    const source = new EventSource(`${process.env.NEXT_PUBLIC_API_BASE ?? "http://127.0.0.1:8765"}/api/incidents/${incidentId}/stream`);
-    source.onmessage = () => load();
-    source.addEventListener("timeline", () => load());
-    source.onerror = () => {
-      /* keep polling: the incident screen must survive a broken stream */
-    };
-    return () => source.close();
-  }, [live, incidentId]);
+    load();
+  }, [load]);
+
+  // A new timeline event means the server-side state moved on; reload the
+  // incident so every panel (evidence, hypotheses, actions) stays consistent.
+  const onTimelineEvent = useCallback(() => {
+    load();
+  }, [load]);
+
+  // The API process restarted: the in-memory view is stale, so resync fully.
+  const onBackendRestart = useCallback(
+    (instanceId: string) => {
+      setError(null);
+      load();
+    },
+    [load],
+  );
+
+  const { status, retry } = useIncidentStream({
+    incidentId,
+    enabled: live,
+    onTimelineEvent,
+    onBackendRestart,
+  });
 
   const act = async (label: string, fn: () => Promise<unknown>) => {
     setBusy(label);
@@ -85,6 +98,7 @@ export function CommandView({ incidentId }: { incidentId: string }) {
           <button className="btn-ghost" onClick={() => setLive((v) => !v)}>
             {live ? "Live: on" : "Live: off"}
           </button>
+          <StreamStatus status={status} onRetry={live ? retry : undefined} />
         </div>
       </div>
 
@@ -108,14 +122,14 @@ export function CommandView({ incidentId }: { incidentId: string }) {
 
           <Panel title="Live metrics">
             <div className="grid grid-cols-2 gap-2">
-              {metrics.map((m: any) => {
+              {metrics.map((m: any, i: number) => {
                 const live2 = incident.sim_metrics?.[m.name];
                 const value = live2 ?? m.value;
                 const limit = m.limit ?? null;
                 const pct = limit ? Math.min(100, (Number(value) / limit) * 100) : 50;
                 const tone = limit && Number(value) >= limit * 0.95 ? "bg-signal-red" : pct > 70 ? "bg-signal-amber" : "bg-signal-cyan";
                 return (
-                  <div key={m.name} className="rounded-lg bg-ink-850 px-2.5 py-1.5">
+                  <div key={`${m.name}-${i}`} className="rounded-lg bg-ink-850 px-2.5 py-1.5">
                     <div className="truncate text-[10px] uppercase tracking-wider text-slate-500">{m.name}</div>
                     <div className="text-[15px] font-semibold text-slate-100">
                       {value}
@@ -389,19 +403,10 @@ export function CommandView({ incidentId }: { incidentId: string }) {
           </Panel>
 
           <Panel title="Timeline">
-            <ol className="max-h-[28rem] space-y-1.5 overflow-y-auto pr-1">
-              {(incident.events ?? []).map((e: any) => (
-                <li key={e.id} className="rounded-lg bg-ink-850 px-2.5 py-1.5">
-                  <div className="flex items-center gap-2 text-[10px] uppercase tracking-wider">
-                    <span className="text-signal-cyan">{e.phase}</span>
-                    <span className="text-slate-600">{new Date(e.ts).toISOString().slice(11, 19)}</span>
-                    <span className="text-slate-600">{e.actor}</span>
-                  </div>
-                  <div className="text-[12px] text-slate-200">{e.title}</div>
-                  {e.detail && <p className="line-clamp-3 text-[11px] text-slate-500">{e.detail}</p>}
-                </li>
-              ))}
-            </ol>
+            <TimelinePanel
+              events={incident.events ?? []}
+              hypotheses={incident.hypotheses ?? []}
+            />
           </Panel>
         </div>
       </div>

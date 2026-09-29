@@ -7,11 +7,12 @@ demo is designed to be reset (``POST /api/demo/reset`` or ``scripts/reset_demo.p
 from __future__ import annotations
 
 import os
+import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
@@ -24,6 +25,17 @@ class Base(DeclarativeBase):
 
 _engine: Engine | None = None
 _SessionLocal: sessionmaker[Session] | None = None
+
+
+REQUIRED_TABLES: tuple[str, ...] = (
+    "incidents",
+    "incident_events",
+    "evidence_events",
+    "hypotheses",
+    "action_attempts",
+    "memory_records",
+    "postmortems",
+)
 
 
 def _build_engine() -> Engine:
@@ -44,6 +56,9 @@ def _build_engine() -> Engine:
             cur.execute("PRAGMA journal_mode=WAL")
             cur.execute("PRAGMA synchronous=NORMAL")
             cur.execute("PRAGMA foreign_keys=ON")
+            # 24/7 note: WAL readers must not be starved by a long write, and a
+            # busy writer must wait instead of failing the request immediately.
+            cur.execute("PRAGMA busy_timeout=30000")
             cur.close()
 
     return engine
@@ -82,6 +97,74 @@ def drop_db() -> None:
     from recallops.persistence import models  # noqa: F401
 
     Base.metadata.drop_all(bind=get_engine())
+
+
+def readiness_probe() -> dict[str, object]:
+    """Check that this process can actually serve traffic.
+
+    Three questions, in order of importance for a long-running deployment:
+
+    1. can we *read*? (``SELECT 1``)
+    2. can we *write*? a real read-only filesystem is the most common way a
+       container or a Windows service starts healthy and then fails on the
+       first timeline event, so the write is attempted inside a transaction
+       that is always rolled back - no data is created or destroyed
+    3. is the schema present? a half-created database must not accept traffic
+
+    Never raises: the caller turns the payload into an HTTP status.
+    """
+    started = time.perf_counter()
+    result: dict[str, object] = {
+        "writable": False,
+        "schema_ok": False,
+        "missing_tables": list(REQUIRED_TABLES),
+        "journal_mode": None,
+        "db_path": None,
+        "error": None,
+    }
+    path = db_path()
+    result["db_path"] = str(path) if path else "in-memory"
+    try:
+        with get_engine().connect() as conn:
+            conn.execute(text("SELECT 1"))
+
+            mode = conn.exec_driver_sql("PRAGMA journal_mode").scalar()
+            result["journal_mode"] = str(mode) if mode else None
+
+            found = {
+                str(row[0])
+                for row in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))
+            }
+            missing = [t for t in REQUIRED_TABLES if t not in found]
+            result["missing_tables"] = missing
+            result["schema_ok"] = not missing
+
+        # Write probe on its own connection so it never collides with the
+        # autobegun read transaction above, and always rolled back.
+        with get_engine().connect() as writer:
+            writer.execute(text("CREATE TABLE IF NOT EXISTS _readiness_probe (id INTEGER PRIMARY KEY, ts REAL)"))
+            writer.execute(text("DELETE FROM _readiness_probe"))
+            writer.rollback()
+        result["writable"] = True
+    except Exception as exc:  # noqa: BLE001 - health must never raise
+        result["error"] = f"{type(exc).__name__}: {exc}"[:300]
+    result["latency_ms"] = round((time.perf_counter() - started) * 1000, 2)
+    result["ready"] = bool(result["writable"] and result["schema_ok"])
+    return result
+
+
+def checkpoint_wal() -> dict[str, object]:
+    """Fold the WAL back into the main database file (safe to call anytime).
+
+    Called on shutdown so a restart - or a file copy made by an operator -
+    always sees a consistent, self-contained SQLite file.
+    """
+    try:
+        with get_engine().connect() as conn:
+            busy = conn.exec_driver_sql("PRAGMA wal_checkpoint(TRUNCATE)").fetchall()
+        return {"ok": True, "detail": str(busy)}
+    except Exception as exc:  # noqa: BLE001 - never block shutdown
+        return {"ok": False, "detail": f"{type(exc).__name__}: {exc}"[:200]}
 
 
 def reset_db() -> None:
@@ -128,6 +211,8 @@ def db_path() -> Path | None:
 
 __all__ = [
     "Base",
+    "REQUIRED_TABLES",
+    "checkpoint_wal",
     "db_path",
     "dispose_engine",
     "drop_db",
@@ -135,6 +220,7 @@ __all__ = [
     "get_engine",
     "get_sessionmaker",
     "init_db",
+    "readiness_probe",
     "reset_db",
     "session_scope",
 ]

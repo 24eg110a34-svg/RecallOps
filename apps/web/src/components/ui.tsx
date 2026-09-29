@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api, type Incident } from "@/lib/api";
+import { STREAM_STATUS_LABEL, type StreamStatus } from "@/lib/use-incident-stream";
 
 const NAV = [
   { href: "/", label: "Dashboard" },
@@ -60,6 +61,31 @@ export function MemoryBadge({ mode }: { mode?: string | null }) {
       ? "border-signal-amber/50 bg-signal-amber/15 text-signal-amber"
       : "border-ink-600 bg-ink-800 text-slate-400";
   return <span className={`chip ${tone}`}>{label}</span>;
+}
+
+export function StreamStatus({ status, onRetry }: { status: StreamStatus; onRetry?: () => void }) {
+  const tone =
+    status === "live"
+      ? "border-signal-green/50 bg-signal-green/15 text-signal-green"
+      : status === "reconnecting"
+        ? "border-signal-amber/50 bg-signal-amber/15 text-signal-amber"
+        : status === "offline"
+          ? "border-signal-red/50 bg-signal-red/15 text-signal-red"
+          : "border-ink-600 bg-ink-800 text-slate-300";
+  const dot =
+    status === "live" ? "bg-signal-green" : status === "reconnecting" ? "bg-signal-amber" : status === "offline" ? "bg-signal-red" : "bg-slate-400";
+  const label = STREAM_STATUS_LABEL[status];
+  return (
+    <span className={`chip ${tone}`} title="Incident timeline stream status">
+      <span className={`inline-block h-1.5 w-1.5 rounded-full ${dot} ${status === "reconnecting" ? "animate-pulse" : ""}`} />
+      {label}
+      {status === "offline" && onRetry ? (
+        <button className="ml-1 underline underline-offset-2 hover:opacity-80" onClick={onRetry}>
+          retry
+        </button>
+      ) : null}
+    </span>
+  );
 }
 
 export function ModeProvider({ children }: { children: React.ReactNode }) {

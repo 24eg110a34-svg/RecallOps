@@ -1,19 +1,74 @@
-"""Health routes, including network/connectivity diagnostics for providers."""
+"""Health routes, including network/connectivity diagnostics for providers.
+
+Three levels are exposed, matching what an operator (or a service manager) needs:
+
+* ``/health/live``   - the process is running. Never touches the database.
+* ``/health/ready``  - the process can serve traffic: readable, writable,
+  schema-complete database. Returns 503 when it cannot.
+* ``/health``        - the full component report (additive ``runtime`` block).
+"""
 
 from __future__ import annotations
 
 import time
 from typing import Any
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Response, status
 from sqlalchemy import text
 
 from recallops.api.deps import get_container
 from recallops.memory.models import MEMORY_MODE_LABELS
 from recallops.persistence import models as orm
+from recallops.persistence.db import readiness_probe
+from recallops.services import runtime
 from recallops.services.resilience import HINTS, ErrorKind, diagnose_endpoint
 
 router = APIRouter(tags=["health"])
+
+
+@router.get("/health/live")
+def health_live() -> dict[str, Any]:
+    """Liveness: is the process up? Deliberately dependency-free.
+
+    A liveness probe that consults Hindsight or the database will restart a
+    perfectly healthy API during a dependency outage, turning a degradation
+    into an outage.
+    """
+    return {
+        "status": "alive",
+        "runtime": runtime.snapshot(),
+        "checked_at": time.time(),
+    }
+
+
+@router.get("/health/ready")
+def health_ready(response: Response) -> dict[str, Any]:
+    """Readiness: can this process actually serve requests right now?
+
+    Returns 503 when the database is missing, read-only, or half-created, so a
+    service manager stops routing traffic instead of serving errors.
+    """
+    probe = readiness_probe()
+    ready = bool(probe.get("ready"))
+    runtime.mark_ready(ready, "ready" if ready else f"database not ready: {probe.get('error') or probe.get('missing_tables')}")
+    runtime.mark_checked()
+    if not ready:
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    return {
+        "status": "ready" if ready else "not_ready",
+        "checks": {
+            "database_readable": probe.get("writable"),
+            "database_writable": probe.get("writable"),
+            "schema_complete": probe.get("schema_ok"),
+            "missing_tables": probe.get("missing_tables"),
+            "journal_mode": probe.get("journal_mode"),
+            "db_path": probe.get("db_path"),
+            "latency_ms": probe.get("latency_ms"),
+            "error": probe.get("error"),
+        },
+        "runtime": runtime.snapshot(),
+        "checked_at": time.time(),
+    }
 
 
 @router.get("/health")
@@ -30,6 +85,7 @@ def health() -> dict[str, Any]:
         "version": settings.app_version,
         "environment": settings.environment,
         "demo_mode": settings.demo_mode,
+        "runtime": runtime.snapshot(),
         "components": {
             "database": {"state": db_state, "detail": db_detail},
             "memory": {"state": memory_health.state, "mode": memory_health.mode.value, "detail": memory_health.detail},
@@ -90,6 +146,7 @@ def health_llm() -> dict[str, Any]:
 def health_database() -> dict[str, Any]:
     container = get_container()
     state, detail = _database_health()
+    probe = readiness_probe()
     session = container.orchestrator.session()
     try:
         counts = {
@@ -102,7 +159,19 @@ def health_database() -> dict[str, Any]:
         }
     finally:
         session.close()
-    return {"state": state, "detail": detail, "rows": counts, "url_scheme": container.settings.sqlalchemy_url.split(":", 1)[0]}
+    return {
+        "state": state,
+        "detail": detail,
+        "rows": counts,
+        "url_scheme": container.settings.sqlalchemy_url.split(":", 1)[0],
+        "durability": {
+            "db_path": probe.get("db_path"),
+            "journal_mode": probe.get("journal_mode"),
+            "writable": probe.get("writable"),
+            "schema_ok": probe.get("schema_ok"),
+            "missing_tables": probe.get("missing_tables"),
+        },
+    }
 
 
 @router.get("/health/network")

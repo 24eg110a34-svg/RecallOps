@@ -33,7 +33,7 @@ services:
     command: >
       bash -c "pip install --no-cache-dir -q fastapi 'uvicorn[standard]' pydantic
       pydantic-settings sqlalchemy httpx python-dotenv hindsight-client &&
-      uvicorn recallops.main:app --host 0.0.0.0 --port 8765 --host 0.0.0.0"
+      uvicorn recallops.main:app --host 0.0.0.0 --port 8765"
     ports:
       - "8765:8765"
     environment:
@@ -48,6 +48,28 @@ services:
       CORS_ORIGINS: http://localhost:4321
     volumes:
       - .:/app
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8765/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
     depends_on:
       hindsight:
+        condition: service_started
+
+  web:
+    image: node:20-slim
+    container_name: recallops-web
+    working_dir: /app
+    command: >
+      bash -c "cd apps/web && npm install --no-audit --no-fund && npm run build && npm run start"
+    ports:
+      - "4321:4321"
+    environment:
+      NEXT_PUBLIC_API_BASE: http://localhost:8765
+      NEXT_TELEMETRY_DISABLED: "1"
+    restart: unless-stopped
+    depends_on:
+      api:
         condition: service_started

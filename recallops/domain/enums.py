@@ -171,10 +171,31 @@ class TimelinePhase(StrEnum):
     EVIDENCE = "evidence"
     MEMORY_RECALL = "memory_recall"
     HYPOTHESIS = "hypothesis"
+    INVESTIGATION = "investigation"      # re-analysis updated the hypothesis stack
     RECOMMENDATION = "recommendation"
+    SAFETY_GATE = "safety_gate"          # the safety gate evaluated an action
     APPROVAL = "approval"
     ACTION = "action"
     OUTCOME = "outcome"
     RESOLUTION = "resolution"
     MEMORY = "memory"
     SYSTEM = "system"
+
+
+#: The canonical incident lifecycle, in order. The UI renders this as the
+#: investigation spine and marks each stage with the first matching timeline event,
+#: so a stage with no event yet is visibly "not reached" rather than invented.
+INCIDENT_LIFECYCLE: tuple[tuple[str, str], ...] = (
+    ("incident", "Incident detected"),
+    ("evidence", "Evidence collected"),
+    ("memory_recall", "Memory recalled"),
+    ("hypothesis", "Hypothesis formed"),
+    ("investigation", "Investigation updated"),
+    ("recommendation", "Action planned"),
+    ("safety_gate", "Safety gate evaluated"),
+    ("approval", "Human approval"),
+    ("action", "Action simulated"),
+    ("outcome", "Outcome recorded"),
+    ("resolution", "Postmortem"),
+    ("memory", "Memory stored"),
+)

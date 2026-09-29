@@ -23,7 +23,9 @@ from recallops.api.routes_health import router as health_router
 from recallops.api.routes_incidents import router as incidents_router
 from recallops.api.routes_insights import router as insights_router
 from recallops.config import get_settings
+from recallops.persistence.db import checkpoint_wal, dispose_engine, readiness_probe
 from recallops.security import scrub_exception
+from recallops.services import runtime
 from recallops.services.resilience import ProviderError
 from recallops.tools.base import ToolError
 
@@ -43,9 +45,16 @@ the UI and in the Memory OFF/ON comparison is measured, not staged.
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):  # noqa: ANN201
+    runtime.mark_started()
     container = get_container()
     settings = container.settings
-    logger.info("RecallOps %s starting (env=%s, demo=%s)", __version__, settings.environment, settings.demo_mode)
+    logger.info(
+        "RecallOps %s starting (instance=%s, env=%s, demo=%s)",
+        __version__,
+        runtime.instance_id(),
+        settings.environment,
+        settings.demo_mode,
+    )
     memory_health = container.memory.health()
     logger.info("Memory layer: %s (%s) - %s", memory_health.state, memory_health.mode.value, memory_health.detail)
     logger.info("LLM provider: %s", container.llm.describe())
@@ -71,8 +80,29 @@ async def lifespan(app: FastAPI):  # noqa: ANN201
                 )
             except Exception as exc:  # noqa: BLE001 - never block startup on seeding
                 logger.warning("Demo seeding skipped: %s", exc)
-    yield
-    logger.info("RecallOps shutting down")
+
+    # Readiness is a *verified* state, not an optimistic one: a process that
+    # cannot read, write, and see its schema is alive but must not serve traffic.
+    probe = readiness_probe()
+    runtime.mark_ready(
+        bool(probe.get("ready")),
+        "ready" if probe.get("ready") else f"database not ready: {probe.get('error') or probe.get('missing_tables')}",
+    )
+    runtime.mark_checked()
+    if not probe.get("ready"):
+        logger.error("Readiness check FAILED at startup: %s", probe)
+    else:
+        logger.info("Ready in %.0fms (db=%s, journal=%s)", probe.get("latency_ms", 0.0), probe.get("db_path"), probe.get("journal_mode"))
+
+    try:
+        yield
+    finally:
+        logger.info("RecallOps shutting down (uptime %.1fs)", runtime.uptime_s())
+        checkpoint = checkpoint_wal()
+        if not checkpoint.get("ok"):
+            logger.warning("WAL checkpoint on shutdown failed: %s", checkpoint.get("detail"))
+        runtime.mark_ready(False, "shutting down")
+        dispose_engine()
 
 
 def build_origin_regex(settings) -> str | None:
@@ -142,12 +172,16 @@ def create_app() -> FastAPI:
             "app": "RecallOps",
             "version": __version__,
             "docs": "/docs",
+            "runtime": runtime.snapshot(),
             "scenarios": container.orchestrator.scenarios.ids(),
             "endpoints": {
                 "health": "/health",
+                "liveness": "/health/live",
+                "readiness": "/health/ready",
                 "create_incident": "POST /api/incidents",
                 "analyze": "POST /api/incidents/{id}/analyze",
                 "stream": "GET /api/incidents/{id}/stream",
+                "timeline": "GET /api/incidents/{id}/events",
                 "approve": "POST /api/incidents/{id}/actions/{action_id}/approve",
                 "resolve": "POST /api/incidents/{id}/resolve",
                 "demo_run": "POST /api/demo/run",

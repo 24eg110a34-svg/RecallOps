@@ -23,6 +23,7 @@ from recallops.api.schemas import (
 )
 from recallops.domain.enums import ActionStatus
 from recallops.persistence import models as orm
+from recallops.services import runtime
 from recallops.services.events import event_stream
 
 router = APIRouter(prefix="/api", tags=["incidents"])
@@ -121,15 +122,27 @@ def get_incident(incident_id: str) -> dict[str, Any]:
 
 
 @router.get("/incidents/{incident_id}/stream")
-async def stream_incident(incident_id: str, replay: bool = Query(default=True)) -> StreamingResponse:
+async def stream_incident(
+    incident_id: str,
+    replay: bool = Query(default=True),
+    last_event_id: str | None = Query(default=None, alias="lastEventId", description="Resume after this SSE frame id"),
+) -> StreamingResponse:
     container = get_container()
     if container.orchestrator.load_record(incident_id) is None:
         raise HTTPException(status_code=404, detail=f"unknown incident '{incident_id}'")
     return StreamingResponse(
-        event_stream(incident_id, replay=replay),
+        event_stream(incident_id, replay=replay, last_event_id=last_event_id),
         media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"},
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+            # The frontend reads this to detect that the API restarted and that a
+            # full resync (not a gap-fill) is required.
+            "X-RecallOps-Instance": runtime.instance_id(),
+        },
     )
+
 
 
 @router.post("/incidents/{incident_id}/analyze")

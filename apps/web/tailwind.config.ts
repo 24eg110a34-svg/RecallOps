@@ -20,6 +20,7 @@ const config: Config = {
           green: "#2ee6a8",
           cyan: "#38bdf8",
           violet: "#a78bfa",
+          orange: "#fb923c",
         },
       },
       fontFamily: {
