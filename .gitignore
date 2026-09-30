@@ -22,6 +22,8 @@ TestResults/
 *.log
 .env.*
 !.env.example
+# Runtime artefacts from scripts/start-24x7.ps1: logs, .pid files, pid dirs.
+.runtime/
 .idea/
 .vscode/
 .ruff_cache/

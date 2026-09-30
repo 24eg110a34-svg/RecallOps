@@ -365,6 +365,38 @@ Index("ix_actions_incident_step", ActionAttempt.incident_id, ActionAttempt.step_
 Index("ix_memory_cause_service", MemoryRecord.cause_id, MemoryRecord.service)
 
 
+class OperatorUser(Base):
+    """A human who may drive the console.
+
+    RecallOps performs state-changing operations (execute an action, reset the
+    demo, wipe memory), so an open API is a real operational risk the moment it
+    is reachable from the internet. This table is the credential store behind
+    the login page.
+
+    Only PBKDF2-SHA256 digests are stored - never a plaintext or reversibly
+    encoded password.
+    """
+
+    __tablename__ = "operator_users"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    username: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    # Operator's full name. Column is ``display_name`` for historical reasons; the
+    # API exposes it as ``full_name`` so the client contract matches the form.
+    display_name: Mapped[str] = mapped_column(String(120), default="")
+    # Optional so databases created before email sign-in keep working: the
+    # bootstrap operator may predate this column. Sign-in accepts either the
+    # email or the username, so a NULL email is not a lockout.
+    email: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True, index=True)
+    # Format: pbkdf2_sha256$<iterations>$<salt_b64>$<hash_b64>
+    password_hash: Mapped[str] = mapped_column(String(255))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    failed_attempts: Mapped[int] = mapped_column(Integer, default=0)
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 __all__ = [
     "ActionAttempt",
     "Deployment",
@@ -375,6 +407,7 @@ __all__ = [
     "LogEvent",
     "MemoryRecord",
     "MetricSample",
+    "OperatorUser",
     "Postmortem",
     "Runbook",
     "ServiceDependency",

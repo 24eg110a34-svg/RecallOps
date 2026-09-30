@@ -20,6 +20,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
  * - deduplicate replayed timeline events by `seq` so a reconnect never
  *   double-applies an event the client already rendered.
  */
+import { API_BASE } from "@/lib/api";
 
 export type StreamStatus = "connecting" | "live" | "reconnecting" | "offline";
 
@@ -60,7 +61,9 @@ const BACKOFF_STEPS_MS = [1000, 2000, 4000, 8000, 15000];
 
 export function useIncidentStream({
   incidentId,
-  apiBase = process.env.NEXT_PUBLIC_API_BASE ?? "http://127.0.0.1:8765",
+  // Shares API_BASE with the REST client: the live stream must reach the API on
+  // the same host, or the session cookie is missing from the SSE request too.
+  apiBase = API_BASE,
   enabled = true,
   onTimelineEvent,
   onBackendRestart,
@@ -102,7 +105,12 @@ export function useIncidentStream({
     close();
 
     const url = `${apiBase}/api/incidents/${incidentId}/stream?replay=true`;
-    const source = new EventSource(url);
+    // withCredentials is required, not optional. EventSource defaults to
+    // same-origin credentials, and the API is always cross-origin (different
+    // port locally, different host in production), so without this the session
+    // cookie is stripped and every stream connection is answered 401 - the live
+    // indicator never turns green and the timeline silently stops updating.
+    const source = new EventSource(url, { withCredentials: true });
     sourceRef.current = source;
 
     if (retryCountRef.current === 0) {

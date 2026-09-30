@@ -10,6 +10,7 @@ import os
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
+from logging import getLogger
 from pathlib import Path
 
 from sqlalchemy import create_engine, event, text
@@ -17,6 +18,8 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from recallops.config import get_settings
+
+logger = getLogger("recallops.db")
 
 
 class Base(DeclarativeBase):
@@ -35,6 +38,7 @@ REQUIRED_TABLES: tuple[str, ...] = (
     "action_attempts",
     "memory_records",
     "postmortems",
+    "operator_users",
 )
 
 
@@ -87,10 +91,44 @@ def dispose_engine() -> None:
 
 
 def init_db() -> None:
-    """Create tables if they do not exist. Idempotent."""
+    """Create tables if they do not exist, then apply additive column fixes.
+
+    Idempotent. ``create_all`` never *alters* an existing table, so a database
+    created before a column was added would otherwise keep the old shape forever
+    and the new column would be missing at runtime. Only additive ``ADD COLUMN``
+    statements are issued, and only for columns SQLite does not already report -
+    no data is dropped or rewritten.
+    """
     from recallops.persistence import models  # noqa: F401  (register mappers)
 
-    Base.metadata.create_all(bind=get_engine())
+    engine = get_engine()
+    Base.metadata.create_all(bind=engine)
+    _apply_additive_columns(engine)
+
+
+#: Columns added after the first release, applied to pre-existing databases.
+_ADDITIVE_COLUMNS: tuple[tuple[str, str, str], ...] = (
+    # (table, column, "TYPE definition")
+    ("operator_users", "email", "VARCHAR(255)"),
+    ("operator_users", "display_name", "VARCHAR(120) DEFAULT ''"),
+)
+
+
+def _apply_additive_columns(engine: Engine) -> None:
+    if not engine.dialect.name == "sqlite":
+        return
+    with engine.connect() as conn:
+        for table, column, ddl in _ADDITIVE_COLUMNS:
+            existing = {r[1] for r in conn.execute(text(f"PRAGMA table_info({table})"))}
+            if not existing or column in existing:
+                continue
+            # A UNIQUE constraint cannot be added by ALTER TABLE in SQLite, so the
+            # column is added plain; uniqueness is enforced in the auth service and
+            # in the fresh schema. Existing rows get NULL, which SQLite allows many
+            # times under a non-unique index.
+            conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}"))
+            conn.commit()
+            logger.info("Applied additive migration: %s.%s", table, column)
 
 
 def drop_db() -> None:

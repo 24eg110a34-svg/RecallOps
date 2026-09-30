@@ -21,6 +21,14 @@ os.environ.setdefault("DEMO_MODE", "true")
 os.environ.setdefault("DEMO_SEED_ON_START", "false")
 os.environ.setdefault("CORS_ORIGINS", "http://localhost:4321")
 
+# Auth must be OFF for the suite, and it must be forced rather than defaulted:
+# pydantic-settings also reads the developer's .env file, so a local .env with
+# AUTH_REQUIRED=true would otherwise turn the whole suite into 401s. These are
+# real assignments, not setdefault, because os.environ wins over the env file.
+os.environ["AUTH_REQUIRED"] = "false"
+os.environ["AUTH_REGISTRATION_ENABLED"] = "true"
+os.environ["AUTH_SECRET"] = "test-only-signing-key"
+
 
 @pytest.fixture(scope="session", autouse=True)
 def _env() -> None:

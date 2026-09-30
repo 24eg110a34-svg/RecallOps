@@ -46,7 +46,7 @@ npm run dev        # http://127.0.0.1:4321
 ```
 
 > Ports are deliberately **8765** (API) and **4321** (web). Override with
-> `API_PORT` / `WEB_PORT` and `NEXT_PUBLIC_API_BASE`.
+> `API_PORT` / `WEB_PORT` and `NEXT_PUBLIC_API_URL`.
 
 ### 1.3 The 60-second demo
 

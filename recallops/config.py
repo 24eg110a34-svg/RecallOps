@@ -33,16 +33,52 @@ class Settings(BaseSettings):
     demo_seed_on_start: bool = True
     database_url: str = "sqlite:///./recallops.db"
     scenarios_dir: str = "./scenarios"
-    cors_origins: str = "http://localhost:4321,http://127.0.0.1:4321"
+    cors_origins: str = (
+        "http://localhost:4321,http://127.0.0.1:4321,"
+        "https://recall-ops-five.vercel.app"
+    )
     # Accept any loopback port (localhost/127.0.0.1/[::1]) so a different dev port
     # never breaks the demo with a CORS 400.
     cors_allow_localhost: bool = True
     # Also accept private-LAN origins so the demo can be opened from another device.
     cors_allow_lan: bool = True
+    # Vercel preview deployments get random subdomains, so the production origin is
+    # listed exactly above and previews are matched by this regex instead. Scoped to
+    # vercel.app so an arbitrary host can never borrow the deployment's origin.
+    cors_allow_vercel_preview: bool = True
     log_level: str = "info"
     api_host: str = "127.0.0.1"
     api_port: int = 8765
     web_port: int = 4321
+
+    # --- auth --------------------------------------------------------------
+    # When true, every /api route requires a valid session except the health
+    # probes and the schema docs. Left false by default so the local demo and
+    # the test-suite keep working with no credentials; turn it ON for any
+    # deployment reachable from the internet.
+    auth_required: bool = False
+    # HMAC key used to sign session cookies. If unset a random key is generated
+    # per process, which means every restart invalidates existing sessions -
+    # set it explicitly in production or sessions will drop on every deploy.
+    auth_secret: str | None = None
+    # Session lifetime in seconds.
+    auth_session_ttl_s: int = 60 * 60 * 12
+    # First-run operator. If a username is given and no operator exists yet, it
+    # is created on startup. If the password is left empty a strong random one is
+    # generated and printed to the log exactly once - never a guessable default.
+    auth_username: str | None = None
+    auth_password: str | None = None
+    # Cross-site cookies (Vercel -> Render) require SameSite=None; Secure.
+    # Local http://localhost:4321 -> :8765 is same-site, so Lax is enough.
+    auth_cookie_secure: bool = False
+    auth_cookie_samesite: str = "lax"
+    # Allow self-service sign-up. Turn this OFF for a closed console: with it on,
+    # anyone who can reach the login page can create an operator account and
+    # therefore drive actions and reset the demo.
+    auth_registration_enabled: bool = True
+    # Shortest password accepted at sign-up. The bootstrap operator is exempt
+    # because it is usually set by an operator who knows what they are doing.
+    auth_min_password_length: int = 8
 
     # --- hindsight ---------------------------------------------------------
     hindsight_base_url: str | None = None

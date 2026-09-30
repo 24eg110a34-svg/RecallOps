@@ -22,7 +22,7 @@
 
 [CmdletBinding()]
 param(
-    [string]$RepoRoot = (Split-Path -Parent $PSScriptRoot),
+    [string]$RepoRoot = "",
     [string]$ApiPort = "8765",
     [string]$WebPort = "4321",
     [string]$DatabaseUrl = "sqlite:///./recallops.db",
@@ -30,6 +30,15 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+# $PSScriptRoot is not reliable inside a param() default (it is empty in some
+# hosts), so resolve the repository root here instead.
+if ([string]::IsNullOrWhiteSpace($RepoRoot)) {
+    $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+    if ([string]::IsNullOrWhiteSpace($scriptDir)) { $scriptDir = $PSScriptRoot }
+    if ([string]::IsNullOrWhiteSpace($scriptDir)) { $scriptDir = (Get-Location).Path }
+    $RepoRoot = Split-Path -Parent $scriptDir
+}
 Set-Location -LiteralPath $RepoRoot
 
 $pidDir = Join-Path $RepoRoot ".runtime"
@@ -78,7 +87,7 @@ $apiProc = Start-Process -FilePath $pythonExe `
 Set-Content -Path $apiPidFile -Value $apiProc.Id
 
 # --- 4. Start the frontend ---------------------------------------------------
-$env:NEXT_PUBLIC_API_BASE = "http://127.0.0.1:$ApiPort"
+$env:NEXT_PUBLIC_API_URL = "http://127.0.0.1:$ApiPort"
 $env:NEXT_TELEMETRY_DISABLED = "1"
 $env:PORT = $WebPort
 

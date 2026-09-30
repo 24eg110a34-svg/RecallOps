@@ -21,6 +21,7 @@ from recallops.memory.models import MEMORY_MODE_LABELS
 from recallops.persistence import models as orm
 from recallops.persistence.db import readiness_probe
 from recallops.services import runtime
+from recallops.services.auth import auth_status
 from recallops.services.resilience import HINTS, ErrorKind, diagnose_endpoint
 
 router = APIRouter(tags=["health"])
@@ -92,6 +93,7 @@ def health() -> dict[str, Any]:
             "llm": {"state": llm_health.get("state"), "provider": llm_health.get("provider"), "detail": llm_health.get("detail")},
             "simulator": {"state": "connected", "detail": f"{len(container.orchestrator.scenarios)} seeded scenarios"},
         },
+        "auth": auth_status(),
         "config": settings.public_snapshot(),
         "checked_at": time.time(),
     }

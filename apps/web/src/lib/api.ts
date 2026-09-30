@@ -1,5 +1,28 @@
-export const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE ?? "http://127.0.0.1:8765";
+export const API_BASE = resolveApiBase();
+
+/**
+ * Work out which API the browser should call.
+ *
+ * The session is a host-only cookie, so the API has to live on the *same host*
+ * as the page. A cookie set by `127.0.0.1:8765` is never sent to a page opened
+ * on `localhost:4321`, which silently logs the operator straight back out and
+ * looks like "Sign In does nothing". Deriving the default from the current page
+ * host makes that impossible on localhost, a LAN address, or any other host.
+ *
+ * An explicit NEXT_PUBLIC_API_URL always wins, which is what production uses
+ * (Vercel -> Render, where the cookie is SameSite=None; Secure instead).
+ */
+function resolveApiBase(): string {
+  const configured = process.env.NEXT_PUBLIC_API_URL;
+  if (configured) return configured;
+  if (typeof window !== "undefined") {
+    const { protocol, hostname } = window.location;
+    const port = process.env.NEXT_PUBLIC_API_PORT ?? "8765";
+    return `${protocol}//${hostname}:${port}`;
+  }
+  return "http://127.0.0.1:8765";
+}
+
 
 export type Severity = "SEV-1" | "SEV-2" | "SEV-3" | "SEV-4";
 
@@ -148,17 +171,60 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     ...init,
     headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
     cache: "no-store",
+    // The session lives in an HttpOnly cookie, so every call must send it.
+    // Without this the API is reachable but every request is unauthenticated.
+    credentials: "include",
   });
   const text = await response.text();
   const body = text ? JSON.parse(text) : null;
   if (!response.ok) {
+    // A 401 anywhere means the session expired: send the operator back to the
+    // login page instead of showing a raw "unauthorized" error mid-incident.
+    if (response.status === 401 && typeof window !== "undefined") {
+      if (!window.location.pathname.startsWith("/login")) {
+        window.location.assign(`/login?next=${encodeURIComponent(window.location.pathname)}`);
+      }
+      throw new Error("Session expired. Sign in again.");
+    }
     const detail = body?.detail ?? response.statusText;
     throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
   }
   return body as T;
 }
 
+export type AuthUser = {
+  username: string;
+  email: string | null;
+  full_name: string;
+};
+
+export type AuthSession = {
+  auth_required: boolean;
+  authenticated: boolean;
+  username: string | null;
+  user: AuthUser | null;
+  operators_configured: boolean;
+  registration_enabled: boolean;
+  min_password_length: number;
+};
+
 export const api = {
+  session: () => request<AuthSession>("/api/auth/session"),
+  me: () => request<{ authenticated: boolean; user: AuthUser }>("/api/auth/me"),
+  // `email` is what the field is called in the UI, but the backend also accepts
+  // a username, so an account without an email can still sign in.
+  login: (email: string, password: string) =>
+    request<{ authenticated: boolean; user: AuthUser; expires_in_s: number }>("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    }),
+  register: (input: { full_name: string; email: string; username: string; password: string }) =>
+    request<{ authenticated: boolean; user: AuthUser; expires_in_s: number }>("/api/auth/register", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  logout: () => request<{ authenticated: boolean }>("/api/auth/logout", { method: "POST" }),
+
   health: () => request<Record<string, any>>("/health"),
   memoryHealth: () => request<Record<string, any>>("/health/memory"),
   llmHealth: () => request<Record<string, any>>("/health/llm"),

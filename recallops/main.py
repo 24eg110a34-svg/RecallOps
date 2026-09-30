@@ -18,6 +18,7 @@ from fastapi.responses import JSONResponse
 from recallops import __version__
 from recallops.agent.orchestrator import ActionNotFound, IncidentNotFound, InvalidTransition
 from recallops.api.deps import get_container
+from recallops.api.routes_auth import router as auth_router
 from recallops.api.routes_demo import router as demo_router
 from recallops.api.routes_health import router as health_router
 from recallops.api.routes_incidents import router as incidents_router
@@ -25,6 +26,7 @@ from recallops.api.routes_insights import router as insights_router
 from recallops.config import get_settings
 from recallops.persistence.db import checkpoint_wal, dispose_engine, readiness_probe
 from recallops.security import scrub_exception
+from recallops.services import auth as auth_service
 from recallops.services import runtime
 from recallops.services.resilience import ProviderError
 from recallops.tools.base import ToolError
@@ -94,6 +96,16 @@ async def lifespan(app: FastAPI):  # noqa: ANN201
     else:
         logger.info("Ready in %.0fms (db=%s, journal=%s)", probe.get("latency_ms", 0.0), probe.get("db_path"), probe.get("journal_mode"))
 
+    # Credentials are created before the server accepts traffic so the very first
+    # request is not rejected for having nobody to sign in as.
+    if settings.auth_required:
+        try:
+            auth_service.bootstrap_operator()
+        except Exception as exc:  # noqa: BLE001 - never block startup on this
+            logger.error("Operator bootstrap failed: %s", exc)
+    else:
+        logger.info("AUTH_REQUIRED is false - the API is open (local/demo mode). Set AUTH_REQUIRED=true for any public deployment.")
+
     try:
         yield
     finally:
@@ -119,6 +131,10 @@ def build_origin_regex(settings) -> str | None:
     if settings.cors_allow_lan:
         # RFC1918 ranges only - never a public host.
         patterns.append(r"^https?://(10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})(:\d+)?$")
+    if settings.cors_allow_vercel_preview:
+        # Vercel preview deployments (recall-ops-*.vercel.app). Scoped to
+        # vercel.app so this cannot be used to allow an arbitrary public host.
+        patterns.append(r"^https://[a-z0-9-]+\.vercel\.app$")
     return "|".join(patterns) if patterns else None
 
 
@@ -130,6 +146,40 @@ def create_app() -> FastAPI:
         version=__version__,
         lifespan=lifespan,
     )
+
+    @app.middleware("http")
+    async def require_session(request: Request, call_next):  # noqa: ANN001, ANN202
+        """Require a signed session for non-public routes.
+
+        Implemented as middleware rather than a per-route dependency so enabling
+        auth cannot be forgotten on a new endpoint - a new route is protected by
+        default instead of accidentally shipping open.
+
+        OPTIONS/HEAD are exempt: a browser's CORS preflight carries no cookies, so
+        demanding a session there would answer 401 instead of the preflight and the
+        real request would never leave the browser.
+        """
+        if request.method in ("OPTIONS", "HEAD"):
+            return await call_next(request)
+        if not settings.auth_required or auth_service.is_public_path(request.url.path):
+            return await call_next(request)
+        if auth_service.current_user(request) is None:
+            from fastapi.responses import JSONResponse as _JSONResponse
+
+            return _JSONResponse(
+                status_code=401,
+                content={"detail": "Sign in to use the RecallOps console."},
+                headers={"WWW-Authenticate": "Session"},
+            )
+        return await call_next(request)
+
+    # CORS is registered LAST on purpose.
+    #
+    # Starlette wraps middleware in reverse registration order, so the last one
+    # added is the OUTERMOST. CORS must be outermost: when this guard returns its
+    # own 401, an inner CORSMiddleware never runs, and the browser sees a response
+    # with no Access-Control-Allow-Origin - reported as an opaque CORS failure
+    # rather than the 401 the frontend needs in order to redirect to /login.
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origin_list or [],
@@ -141,6 +191,7 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(health_router)
+    app.include_router(auth_router)
     app.include_router(incidents_router)
     app.include_router(demo_router)
     app.include_router(insights_router)
@@ -173,11 +224,15 @@ def create_app() -> FastAPI:
             "version": __version__,
             "docs": "/docs",
             "runtime": runtime.snapshot(),
+            "auth": auth_service.auth_status(),
             "scenarios": container.orchestrator.scenarios.ids(),
             "endpoints": {
                 "health": "/health",
                 "liveness": "/health/live",
                 "readiness": "/health/ready",
+                "login": "POST /api/auth/login",
+                "logout": "POST /api/auth/logout",
+                "session": "GET /api/auth/session",
                 "create_incident": "POST /api/incidents",
                 "analyze": "POST /api/incidents/{id}/analyze",
                 "stream": "GET /api/incidents/{id}/stream",
